@@ -1,20 +1,15 @@
-Package: candlesticks
+Package: ecandlesticks
 Type: Package
 Title: Candlestick Pattern Recognition
-Version: 0.2-9
-Date: 2020-02-01
-Author: Andreas Voellenklee
-Maintainer: Andreas Voellenklee <wotuzu17@gmail.com>
-Depends: R (>= 2.13), xts (>= 0.8-2), quantmod (>= 0.3-17), TTR (>=
-        0.21-0)
+Version: 0.1.1
+Date: 2025-09-08
+Author: Andreas Voellenklee [aut", "cph"], Deng Yishuo [aut", "cph"]
+Maintainer: DengYishuo <dengyishuo@163.com>
+Depends: R (>= 4.5.1), xts (>= 0.8-2), quantmod (>= 0.3-17), TTR (>= 0.21-0), ggplot2 (>= 3.5.2)
+Imports: cowplot (>= 1.2.0), dplyr (>= 1.1.4), lubridate (>= 1.9.4), zoo (>= 1.8-14)
 Description: Filter Japanese Candlestick Patterns like Doji, Engulfing, Harami, etc. out of OHLC price data.
-URL: https://r-forge.r-project.org/projects/candlesticks/
+URL: https://github.com/dengyishuo/candlesticks/
+Encoding: UTF-8
 License: GPL-3
 LazyLoad: yes
-Repository: R-Forge
-Repository/R-Forge/Project: candlesticks
-Repository/R-Forge/Revision: 36
-Repository/R-Forge/DateTimeStamp: 2020-02-01 21:27:44
-Date/Publication: 2020-02-01 21:27:44
-NeedsCompilation: no
-Packaged: 2020-02-01 21:50:14 UTC; rforge
+RoxygenNote: 7.3.2

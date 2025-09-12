@@ -1,16 +1,96 @@
-CSPDoji <- function(TS, maxbodyCL=.1, maxshadowCL=.1) {
-  if (!is.OHLC(TS)) {
+#' Doji Candlestick Pattern
+#'
+#' Identify Doji Patterns in an OHLC price series
+#'
+#' @param TS An xts time series containing Open and Close prices
+#' @param maxbodyCL Maximum body-to-length ratio, default = 0.1
+#' @param maxshadowCL Maximum tolerated upper (lower) shadow ratio to identify a dragonfly (gravestone) doji, default = 0.1
+#'
+#' @details
+#' Number of candle lines: \strong{1}
+#'
+#' A Doji is formed when the open and close prices are the same or very close. By default settings, a Doji is identified when the body of the candle is smaller than or equal to 1/10 of its full length.
+#'
+#' The bullish Dragonfly Doji pattern has a long lower shadow but almost no upper shadow. Conversely, the bearish Gravestone Doji has a long upper shadow but almost no lower shadow. Dragonfly Doji and Gravestone Doji can be reversal signals during downtrends/uptrends.
+#'
+#' @return An xts object containing the following columns:
+#' \itemize{
+#' \item \code{Doji}: TRUE if a Doji pattern is detected
+#' \item \code{DragonflyDoji}: TRUE if a Dragonfly Doji pattern is detected
+#' \item \code{GravestoneDoji}: TRUE if a Gravestone Doji pattern is detected
+#' }
+#'
+#' @author Andreas Voellenklee
+#' @references
+#' Reference sites used for coding/documenting this candlestick pattern:
+#' \itemize{
+#' \item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/Doji.html}
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' This function only filters candlesticks that resemble Doji patterns, without considering the current trend direction. To filter for Doji patterns in an uptrend, an external trend detection function must be used. See examples.
+#'
+#' @examples
+#' \dontrun{
+#' # Obtain example data
+#' getSymbols("YHOO", adjust = TRUE)
+#'
+#' # Identify Doji patterns
+#' CSPDoji(YHOO)
+#'
+#' # Filter for Doji patterns where the open price equals the close price
+#' CSPDoji(YHOO, maxbodyCL = 0)
+#'
+#' # Filter for Gravestone Doji patterns in an uptrend
+#' CSPDoji(YHOO)[, "GravestoneDoji"] & TrendDetectionChannel(YHOO)[, "UpTrend"]
+#' }
+#'
+#' @export
+CSPDoji <- function(TS, maxbodyCL = .1, maxshadowCL = .1) {
+  #  Validate input data contains OHLC data
+
+  if (!quantmod::is.OHLC(TS)) {
     stop("Price series must contain Open, High, Low and Close.")
   }
-  BL <- abs(Cl(TS)-Op(TS))
-  CL <- Hi(TS)-Lo(TS)
-  BodyHi <- pmax(Op(TS), Cl(TS))
-  BodyLo <- pmin(Op(TS), Cl(TS))
-  Doji <- reclass(BL < CL* maxbodyCL, TS)
-  DFDoji <- reclass(Doji & (Hi(TS)-BodyHi <= CL* maxshadowCL), TS)
-  GSDoji <- reclass(Doji & (BodyLo-Lo(TS) <= CL* maxshadowCL), TS)
+
+  #  Calculate candlestick body length (absolute difference between Close and Open prices)
+
+  BL <- abs(quantmod::Cl(TS) - quantmod::Op(TS))
+
+  #  Calculate total candlestick length (High - Low)
+
+  CL <- quantmod::Hi(TS) - quantmod::Lo(TS)
+
+  # Determine the high point of the candlestick body (maximum of Open/Close)
+
+  BodyHi <- pmax(quantmod::Op(TS), quantmod::Cl(TS))
+
+  #  Determine the low point of the candlestick body (minimum of Open/Close)
+
+  BodyLo <- pmin(quantmod::Op(TS), quantmod::Cl(TS))
+
+  #  Identify standard Doji
+
+  Doji <- xts::reclass(BL < CL * maxbodyCL, TS)
+
+  #  Identify Dragonfly Doji (standard Doji + minimal upper shadow)
+
+  DFDoji <- xts::reclass(Doji & (quantmod::Hi(TS) - BodyHi <= CL * maxshadowCL), TS)
+
+  #  Identify Gravestone Doji (standard Doji + minimal lower shadow)
+
+  GSDoji <- xts::reclass(Doji & (BodyLo - quantmod::Lo(TS) <= CL * maxshadowCL), TS)
+
+  #  Combine results and set column names
+
   result <- cbind(Doji, DFDoji, GSDoji)
   colnames(result) <- c("Doji", "DragonflyDoji", "GravestoneDoji")
-  xtsAttributes(result) <- list(bars=1)
-  return (result)
+
+  #  Add attribute to mark that this pattern requires 1 candlestick
+
+  xts::xtsAttributes(result) <- list(bars = 1)
+
+  return(result)
 }
