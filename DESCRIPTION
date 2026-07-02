@@ -1,4 +1,4 @@
-Package: ecandlesticks
+Package: candlesticks
 Type: Package
 Title: Candlestick Pattern Recognition
 Version: 0.1.1
