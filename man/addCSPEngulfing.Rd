@@ -2,61 +2,192 @@
 % Please edit documentation in R/addCSPEngulfing.R
 \name{addCSPEngulfing}
 \alias{addCSPEngulfing}
-\title{Add CSP Engulfing Points to Candlestick Chart}
+\title{Engulfing Candlestick Pattern}
 \usage{
-addCSPEngulfing(
-  eCandleSticks_result,
-  csp_engulfing_result,
-  bullish_engulfing_color = "green",
-  bearish_engulfing_color = "red",
-  point_size = 3,
-  bullish_engulfing_shape = 24,
-  bearish_engulfing_shape = 25,
-  point_alpha = 0.8
-)
+addCSPEngulfing(x, output = c("xts", "tibble", "data.frame"))
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_engulfing_result}{The result object from CSP Engulfing analysis, which should be a data frame
-containing a 'Date' column and logical columns 'Bull.Engulfing' and 'Bear.Engulfing'}
-
-\item{bullish_engulfing_color}{Color for Bullish Engulfing points. Default "green".}
-
-\item{bearish_engulfing_color}{Color for Bearish Engulfing points. Default "red".}
-
-\item{point_size}{Size for the Engulfing points. Default 3.}
-
-\item{bullish_engulfing_shape}{Shape for Bullish Engulfing points. Default 24 (up triangle).}
-
-\item{bearish_engulfing_shape}{Shape for Bearish Engulfing points. Default 25 (down triangle).}
-
-\item{point_alpha}{Alpha transparency for the Engulfing points. Default 0.8.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Engulfing points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the columns:
+\itemize{
+\item Bull.Engulfing: TRUE if bullish engulfing pattern detected
+\item Bear.Engulfing: TRUE if bearish engulfing pattern detected
+}
 }
 \description{
-This function adds CSP Engulfing points (Bullish Engulfing and Bearish Engulfing)
-to a candlestick chart created by eCandleSticks using the results from a CSP Engulfing analysis,
-and recombines it with the volume subplot if it exists.
+Identifies Bullish and Bearish Engulfing Patterns in an Open/Close price series.
+}
+\details{
+Number of candle lines: \bold{2}
+
+\strong{Bullish Engulfing Pattern:}
+\itemize{
+\item Prior trend: \bold{down}
+\item Characterized by a large white real body engulfing a preceding small black real body
+\item The white body does not necessarily engulf the shadows of the black body but totally engulfs the body itself
+\item Appears during a downtrend
+}
+
+\strong{Bearish Engulfing Pattern:}
+\itemize{
+\item Prior trend: \bold{up}
+\item Characterized by a large black real body engulfing a preceding small white real body
+\item The black body does not necessarily engulf the shadows of the white body but totally engulfs the body itself
+\item Appears during an uptrend
+}
+}
+\note{
+The function filters patterns that look like engulfing patterns, without considering
+the current trend direction. If only patterns in uptrends/downtrends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
+addCSPEngulfing(YHOO)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter bearish engulfing patterns that occur in uptrends
+addCSPEngulfing(YHOO)[, "Bear.Engulfing"] &
+  TrendDetectionChannel(YHOO)[, "UpTrend"]
+}
 
-# Get CSP Engulfing results
-csp_engulfing_data <- CSPEngulfing(AAPL) # This returns a data frame with Bull.Engulfing and Bear.Engulfing columns
-
-# Add Engulfing points
-result_with_engulfing <- addCSPEngulfing(result, csp_engulfing_data)
-
-# Display the combined plot with Engulfing points
-print(result_with_engulfing$combined_plot)
+}
+\references{
+The following sites were used to code/document this candlestick pattern:
+\itemize{
+\item \url{http://thepatternsite.com/BullEngulfing.html}
+\item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/BullishEngulfing.html}
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.candlesticker.com/Bearish.asp}
 }
 }
+\seealso{
+Other pattern-2bar:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInsideDay]{addCSPInsideDay()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPOutsideDay]{addCSPOutsideDay()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInsideDay]{drawCSPInsideDay()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPOutsideDay]{drawCSPOutsideDay()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-2bar}
+\concept{pattern-bear}
+\concept{pattern-bull}

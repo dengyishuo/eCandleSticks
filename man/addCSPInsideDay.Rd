@@ -2,57 +2,66 @@
 % Please edit documentation in R/addCSPInsideDay.R
 \name{addCSPInsideDay}
 \alias{addCSPInsideDay}
-\title{Add CSP Inside Day Points to Candlestick Chart}
+\title{Identify Inside Day Patterns}
 \usage{
-addCSPInsideDay(
-  eCandleSticks_result,
-  csp_inside_day_result,
-  inside_day_color = "purple",
-  point_size = 3,
-  inside_day_shape = 23,
-  point_alpha = 0.8,
-  mark_at_midpoint = TRUE
-)
+addCSPInsideDay(x, output = c("xts", "tibble", "data.frame"))
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing OHLC prices}
 
-\item{csp_inside_day_result}{The result object from CSP Inside Day analysis, which should be a data frame
-containing a 'Date' column and a logical column 'InsideDay'}
-
-\item{inside_day_color}{Color for Inside Day points. Default "purple".}
-
-\item{point_size}{Size for the Inside Day points. Default 3.}
-
-\item{inside_day_shape}{Shape for Inside Day points. Default 23 (diamond).}
-
-\item{point_alpha}{Alpha transparency for the Inside Day points. Default 0.8.}
-
-\item{mark_at_midpoint}{Whether to mark at the midpoint of the candle instead of Close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Inside Day points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item InsideDay: TRUE if current candle is an inside day
+}
 }
 \description{
-This function adds CSP Inside Day points to a candlestick chart created by eCandleSticks
-using the results from a CSP Inside Day analysis, and recombines it with the volume subplot if it exists.
+Detects inside day patterns in an OHLC price series. An inside day occurs when
+the current bar remains completely within the previous day's high and low range.
+}
+\details{
+Number of candle lines: \bold{2}
+
+\strong{Inside Day:}
+In an inside day, the current bar remains completely within the previous day's
+bar high and low range. This pattern often indicates consolidation and can
+precede significant price moves.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
-
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
-
-# Get CSP Inside Day results
-csp_inside_day_data <- CSPInsideDay(AAPL) # This returns a data frame with InsideDay column
-
-# Add Inside Day points
-result_with_inside_day <- addCSPInsideDay(result, csp_inside_day_data)
-
-# Display the combined plot with Inside Day points
-print(result_with_inside_day$combined_plot)
+getSymbols("YHOO", adjust = TRUE)
+addCSPInsideDay(YHOO)
 }
+
 }
+\references{
+\url{http://www.investopedia.com/terms/i/inside_day.asp#axzz1jWelu1cm}
+}
+\seealso{
+Other pattern-2bar:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPOutsideDay]{addCSPOutsideDay()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInsideDay]{drawCSPInsideDay()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPOutsideDay]{drawCSPOutsideDay()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-2bar}

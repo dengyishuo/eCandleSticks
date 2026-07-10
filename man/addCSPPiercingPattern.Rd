@@ -2,58 +2,148 @@
 % Please edit documentation in R/addCSPPiercingPattern.R
 \name{addCSPPiercingPattern}
 \alias{addCSPPiercingPattern}
-\title{Add CSP Piercing Pattern Points to Candlestick Chart}
+\title{Piercing Candlestick Pattern}
 \usage{
 addCSPPiercingPattern(
-  eCandleSticks_result,
-  csp_piercing_pattern_result,
-  piercing_pattern_color = "blue",
-  point_size = 3,
-  piercing_pattern_shape = 21,
-  point_alpha = 0.8,
-  mark_at_close = TRUE
+  x,
+  n = 20,
+  minbodysizeMedian = 1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close Prices}
 
-\item{csp_piercing_pattern_result}{The result object from CSP Piercing Pattern analysis,
-which should be a data frame containing a 'Date' column and a logical column 'PiercingPattern'}
+\item{n}{Number of preceding candles to calculate median candle body length. Default is 20.}
 
-\item{piercing_pattern_color}{Color for Piercing Pattern points. Default "blue".}
+\item{minbodysizeMedian}{Minimum body length relative to the median of the past \code{n} body sizes. Default is 1.}
 
-\item{point_size}{Size for the Piercing Pattern points. Default 3.}
-
-\item{piercing_pattern_shape}{Shape for Piercing Pattern points. Default 21 (filled circle with border).}
-
-\item{point_alpha}{Alpha transparency for the Piercing Pattern points. Default 0.8.}
-
-\item{mark_at_close}{Whether to mark at the close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Piercing Pattern points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item PiercingPattern: TRUE if Piercing Pattern detected
+}
 }
 \description{
-This function adds CSP Piercing Pattern points to a candlestick chart
-created by eCandleSticks using the results from a CSP Piercing Pattern analysis,
-and recombines it with the volume subplot if it exists.
+Identifies Piercing Patterns in an Open/Close price series.
+This is a two-candle bullish reversal pattern that occurs during a downtrend.
+}
+\details{
+Number of candle lines: \bold{2}
+
+A Piercing Pattern consists of:
+\enumerate{
+\item A long black candlestick (first candle)
+\item A gap lower opening on the next day
+\item A white candlestick that closes more than halfway into the prior black candlestick's real body
+\item The close of the second candle is still below the open of the first candle
+}
+
+This pattern is considered a bullish reversal signal when it appears during a downtrend.
+}
+\note{
+The function filters patterns that look like piercing patterns, without considering
+the current trend direction. If only patterns in downtrends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
+addCSPPiercingPattern(YHOO)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter piercing patterns that occur in downtrends.
+# The lag of 2 periods of the time series for trend detection
+# ensures that the downtrend is active before the
+# piercing pattern occurs.
+addCSPPiercingPattern(YHOO) &
+  TrendDetectionChannel(lag(YHOO, k = 2))[, "DownTrend"]
+}
 
-# Get CSP Piercing Pattern results
-csp_piercing_pattern_data <- CSPPiercingPattern(AAPL) # This returns a data frame with PiercingPattern column
-
-# Add Piercing Pattern points
-result_with_piercing_pattern <- addCSPPiercingPattern(result, csp_piercing_pattern_data)
-
-# Display the combined plot with Piercing Pattern points
-print(result_with_piercing_pattern$combined_plot)
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/PiercingPattern.html}
 }
 }
+\seealso{
+The counterpart of this pattern is \code{\link{addCSPDarkCloudCover}}
+
+Other pattern-2bar:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInsideDay]{addCSPInsideDay()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPOutsideDay]{addCSPOutsideDay()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInsideDay]{drawCSPInsideDay()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPOutsideDay]{drawCSPOutsideDay()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-2bar}
+\concept{pattern-bull}

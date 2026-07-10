@@ -1,147 +1,79 @@
-#' Add CSP N Long Black Candles Points to Candlestick Chart
+#' N Consecutive Long Black Candles
 #'
-#' This function adds CSP N Long Black Candles points to a candlestick chart
-#' created by eCandleSticks using the results from a CSP N Long Black Candles analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies sequences of N consecutive long black candles in an OHLC price series.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_n_long_black_result The result object from CSP N Long Black Candles analysis,
-#'        which should be a data frame containing a 'Date' column and a logical column
-#'        'X2LongBlackCandles' (or similar pattern for different N values)
-#' @param n_long_black_color Color for N Long Black Candles points. Default "red".
-#' @param point_size Size for the N Long Black Candles points. Default 3.
-#' @param n_long_black_shape Shape for N Long Black Candles points. Default 16 (filled circle).
-#' @param point_alpha Alpha transparency for the N Long Black Candles points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
+#' @param N Number of consecutive candles to test. Default is 2.
+#' @param n Number of preceding candles to calculate median candle length. Default is 20.
+#' @param threshold Minimum candle length in relation to the median candle length
+#' of \code{n} preceding candles. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with N Long Black Candles points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' This function identifies when the current candle is the N-th consecutive long black candle.
+#' A candle is considered "long" if its length is greater than or equal to the threshold
+#' times the median candle length of the preceding n candles.
+#'
+#' @return
+#' A xts object containing the column:
+#' \itemize{
+#' \item {N}LongBlackCandles: TRUE if current candle is the \code{N}-th consecutive long black candle
+#' }
+#'
+#' @author Andreas Voellenklee
+#'
+#' @seealso
+#' \code{\link{addCSPLongCandle}}
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
-#'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP N Long Black Candles results
-#' csp_n_long_black_data <- CSPNLongBlackCandles(AAPL) # This returns a data frame with X2LongBlackCandles column
-#'
-#' # Add N Long Black Candles points
-#' result_with_n_long_black <- addCSPNLongBlackCandles(result, csp_n_long_black_data)
-#'
-#' # Display the combined plot with N Long Black Candles points
-#' print(result_with_n_long_black$combined_plot)
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPNLongBlackCandles(YHOO, N = 3)
 #' }
-addCSPNLongBlackCandles <- function(eCandleSticks_result, csp_n_long_black_result,
-                                    n_long_black_color = "red", point_size = 3,
-                                    n_long_black_shape = 16, point_alpha = 0.8,
-                                    mark_at_close = TRUE) {
-  # Validate csp_n_long_black_result
-  if (!is.data.frame(csp_n_long_black_result) && !xts::is.xts(csp_n_long_black_result)) {
-    stop("csp_n_long_black_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-nbar
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod is.OHLC
+#' @importFrom xts reclass xtsAttributes as.xts
+#' @importFrom stats lag
+addCSPNLongBlackCandles <- function(x, N = 2, n = 20, threshold = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
   }
+  TS <- x
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_n_long_black_result)) {
-    csp_n_long_black_result <- data.frame(
-      Date = zoo::index(csp_n_long_black_result),
-      as.data.frame(csp_n_long_black_result)
-    )
+  if (!quantmod::is.OHLC(TS)) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
-
-  if (!"Date" %in% colnames(csp_n_long_black_result)) {
-    stop("csp_n_long_black_result must contain a 'Date' column")
+  if (N < 1) {
+    stop("N has to be a integer >= 1")
   }
+  LBC <- addCSPLongCandle(TS, n = n, threshold = threshold)[, 2] # LongBlackCandle
+  result <- xts::reclass(xts::as.xts(apply(stats::lag(LBC, k = 0:(N - 1)), 1, all)), TS)
+  colnames(result) <- paste(N, "LongBlackCandles", sep = "")
+  xts::xtsAttributes(result) <- list(bars = N)
 
-  # Find the column name that contains "LongBlackCandles"
-  pattern_col <- grep("LongBlackCandles", colnames(csp_n_long_black_result), value = TRUE)
-  if (length(pattern_col) == 0) {
-    stop("csp_n_long_black_result must contain a column with 'LongBlackCandles' in its name")
-  }
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Use the first matching column
-  pattern_col_name <- pattern_col[1]
-
-  # Extract the N value from the column name (e.g., "X2" from "X2LongBlackCandles")
-  n_value <- gsub("LongBlackCandles", "", pattern_col_name)
-  n_value <- gsub("X", "", n_value)
-  pattern_name <- paste0(n_value, " Long Black Candles")
-
-  # Convert Date to proper format if needed
-  csp_n_long_black_result$Date <- as.Date(csp_n_long_black_result$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_n_long_black_result, by = "Date", all.x = TRUE)
-
-  # Extract N Long Black Candles points
-  n_long_black_points <- merged_data[merged_data[[pattern_col_name]] == TRUE & !is.na(merged_data[[pattern_col_name]]), ]
-
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    n_long_black_points$NLongBlackLevel <- n_long_black_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    n_long_black_points$NLongBlackLevel <- (n_long_black_points$High + n_long_black_points$Low) / 2
-  }
-
-  # Add N Long Black Candles points to the price plot
-  price_plot_with_n_long_black <- eCandleSticks_result$price_plot
-
-  # Add N Long Black Candles points (if any)
-  if (nrow(n_long_black_points) > 0) {
-    price_plot_with_n_long_black <- price_plot_with_n_long_black +
-      ggplot2::geom_point(
-        data = n_long_black_points,
-        aes(x = Date, y = NLongBlackLevel, color = pattern_name),
-        size = point_size,
-        shape = n_long_black_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any N Long Black Candles points
-  if (nrow(n_long_black_points) > 0) {
-    price_plot_with_n_long_black <- price_plot_with_n_long_black +
-      ggplot2::scale_color_manual(
-        name = "CSP Patterns",
-        values = setNames(n_long_black_color, pattern_name),
-        breaks = pattern_name
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = n_long_black_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_n_long_black
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_n_long_black, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_n_long_black
-  }
-
-  # Add csp_n_long_black_result to the output for reference
-  eCandleSticks_result$csp_n_long_black_data <- csp_n_long_black_result
-  eCandleSticks_result$n_long_black_points <- n_long_black_points
-  eCandleSticks_result$pattern_name <- pattern_name
-
-  return(eCandleSticks_result)
 }

@@ -1,158 +1,90 @@
-#' Add CSP Short Candle Body Points to Candlestick Chart
+#' Short Candle Body Pattern
 #'
-#' This function adds CSP Short Candle Body points (Short White Candle Body and Short Black Candle Body)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Short Candle Body analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies short candle bodies in an OHLC price series based on their relative length
+#' compared to the median of preceding candle bodies.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_short_candle_body_result The result object from CSP Short Candle Body analysis,
-#'        which should be a data frame containing a 'Date' column and logical columns
-#'        'ShortWhiteCandleBody' and 'ShortBlackCandleBody'
-#' @param short_white_candle_body_color Color for Short White Candle Body points. Default "lightgreen".
-#' @param short_black_candle_body_color Color for Short Black Candle Body points. Default "pink".
-#' @param point_size Size for the Short Candle Body points. Default 3.
-#' @param short_white_candle_body_shape Shape for Short White Candle Body points. Default 20 (small filled circle).
-#' @param short_black_candle_body_shape Shape for Short Black Candle Body points. Default 20 (small filled circle).
-#' @param point_alpha Alpha transparency for the Short Candle Body points. Default 0.8.
-#' @param mark_at_body_center Whether to mark at the center of the candle body instead of Close price. Default TRUE.
+#' @param x xts Time Series containing Open and Close prices
+#' @param n Number of preceding candles to calculate median candle body length. Default is 20.
+#' @param threshold Maximum candle body length in relation to the median candle body length
+#' of \code{n} preceding candles. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with Short Candle Body points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Classifies candle bodies as short based on their relative length compared to the median
+#' of the relative candle body lengths of the preceding \code{n} candles.
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item ShortWhiteCandleBody: TRUE if Short White Candle Body detected
+#' \item ShortBlackCandleBody: TRUE if Short Black Candle Body detected
+#' }
+#'
+#' @author Andreas Voellenklee
+#'
+#' @seealso
+#' \code{\link{CandleBodyLength}}, \code{\link{addCSPLongCandle}}
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
-#'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Short Candle Body results
-#' csp_short_candle_body_data <- CSPShortCandleBody(AAPL) # This returns a data frame with ShortWhiteCandleBody and ShortBlackCandleBody columns
-#'
-#' # Add Short Candle Body points
-#' result_with_short_candle_body <- addCSPShortCandleBody(result, csp_short_candle_body_data)
-#'
-#' # Display the combined plot with Short Candle Body points
-#' print(result_with_short_candle_body$combined_plot)
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPShortCandleBody(YHOO)
 #' }
-addCSPShortCandleBody <- function(eCandleSticks_result, csp_short_candle_body_result,
-                                  short_white_candle_body_color = "lightgreen", short_black_candle_body_color = "pink",
-                                  point_size = 3, short_white_candle_body_shape = 20, short_black_candle_body_shape = 20,
-                                  point_alpha = 0.8, mark_at_body_center = TRUE) {
-  # Validate csp_short_candle_body_result
-  if (!is.data.frame(csp_short_candle_body_result) && !xts::is.xts(csp_short_candle_body_result)) {
-    stop("csp_short_candle_body_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-1bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom TTR runMedian
+#' @importFrom xts reclass xtsAttributes
+addCSPShortCandleBody <- function(x, n = 20, threshold = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_short_candle_body_result)) {
-    csp_short_candle_body_result <- data.frame(
-      Date = zoo::index(csp_short_candle_body_result),
-      as.data.frame(csp_short_candle_body_result)
-    )
-  }
+  CBL <- CandleBodyLength(TS)
+  CBLMedian <- runMedian(CBL[, 1], n = n) # use relative CandleBodyLength
 
-  if (!"Date" %in% colnames(csp_short_candle_body_result)) {
-    stop("csp_short_candle_body_result must contain a 'Date' column")
-  }
+  ShortWhiteCandleBody <- xts::reclass(
+    CBL[, 1] < CBLMedian * threshold & quantmod::Cl(TS) >= quantmod::Op(TS),
+    TS
+  )
 
-  required_cols <- c("ShortWhiteCandleBody", "ShortBlackCandleBody")
-  if (!all(required_cols %in% colnames(csp_short_candle_body_result))) {
-    stop("csp_short_candle_body_result must contain 'ShortWhiteCandleBody' and 'ShortBlackCandleBody' columns")
-  }
+  ShortBlackCandleBody <- xts::reclass(
+    CBL[, 1] < CBLMedian * threshold & quantmod::Op(TS) > quantmod::Cl(TS),
+    TS
+  )
 
-  # Convert Date to proper format if needed
-  csp_short_candle_body_result$Date <- as.Date(csp_short_candle_body_result$Date)
+  result <- cbind(ShortWhiteCandleBody, ShortBlackCandleBody)
+  colnames(result) <- c("ShortWhiteCandleBody", "ShortBlackCandleBody")
+  xts::xtsAttributes(result) <- list(bars = 1)
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_short_candle_body_result, by = "Date", all.x = TRUE)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Extract different types of Short Candle Body points
-  short_white_candle_body_points <- merged_data[merged_data$ShortWhiteCandleBody == TRUE & !is.na(merged_data$ShortWhiteCandleBody), ]
-  short_black_candle_body_points <- merged_data[merged_data$ShortBlackCandleBody == TRUE & !is.na(merged_data$ShortBlackCandleBody), ]
-
-  # Determine y-value for marking
-  if (mark_at_body_center) {
-    # Mark at the center of the candle body
-    short_white_candle_body_points$ShortCandleBodyLevel <- (short_white_candle_body_points$Open + short_white_candle_body_points$Close) / 2
-    short_black_candle_body_points$ShortCandleBodyLevel <- (short_black_candle_body_points$Open + short_black_candle_body_points$Close) / 2
-  } else {
-    # Mark at Close price
-    short_white_candle_body_points$ShortCandleBodyLevel <- short_white_candle_body_points$Close
-    short_black_candle_body_points$ShortCandleBodyLevel <- short_black_candle_body_points$Close
-  }
-
-  # Add Short Candle Body points to the price plot
-  price_plot_with_short_candle_body <- eCandleSticks_result$price_plot
-
-  # Add Short White Candle Body points (if any)
-  if (nrow(short_white_candle_body_points) > 0) {
-    price_plot_with_short_candle_body <- price_plot_with_short_candle_body +
-      ggplot2::geom_point(
-        data = short_white_candle_body_points,
-        aes(x = Date, y = ShortCandleBodyLevel, color = "Short White Candle Body"),
-        size = point_size,
-        shape = short_white_candle_body_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Short Black Candle Body points (if any)
-  if (nrow(short_black_candle_body_points) > 0) {
-    price_plot_with_short_candle_body <- price_plot_with_short_candle_body +
-      ggplot2::geom_point(
-        data = short_black_candle_body_points,
-        aes(x = Date, y = ShortCandleBodyLevel, color = "Short Black Candle Body"),
-        size = point_size,
-        shape = short_black_candle_body_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Short Candle Body points
-  if (nrow(short_white_candle_body_points) > 0 || nrow(short_black_candle_body_points) > 0) {
-    price_plot_with_short_candle_body <- price_plot_with_short_candle_body +
-      ggplot2::scale_color_manual(
-        name = "CSP Short Candle Body Patterns",
-        values = c(
-          "Short White Candle Body" = short_white_candle_body_color,
-          "Short Black Candle Body" = short_black_candle_body_color
-        ),
-        breaks = c("Short White Candle Body", "Short Black Candle Body")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(short_white_candle_body_shape, short_black_candle_body_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_short_candle_body
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_short_candle_body, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_short_candle_body
-  }
-
-  # Add csp_short_candle_body_result to the output for reference
-  eCandleSticks_result$csp_short_candle_body_data <- csp_short_candle_body_result
-  eCandleSticks_result$short_white_candle_body_points <- short_white_candle_body_points
-  eCandleSticks_result$short_black_candle_body_points <- short_black_candle_body_points
-
-  return(eCandleSticks_result)
 }

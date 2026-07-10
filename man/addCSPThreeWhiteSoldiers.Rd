@@ -2,57 +2,153 @@
 % Please edit documentation in R/addCSPThreeWhiteSoldiers.R
 \name{addCSPThreeWhiteSoldiers}
 \alias{addCSPThreeWhiteSoldiers}
-\title{Add CSP Three White Soldiers Pattern to Candlestick Chart}
+\title{Three White Soldiers Candlestick Pattern}
 \usage{
 addCSPThreeWhiteSoldiers(
-  eCandleSticks_result,
-  csp_three_white_result,
-  pattern_color = "darkgreen",
-  point_size = 4,
-  pattern_shape = 24,
-  point_alpha = 0.8,
-  mark_at_close = TRUE
+  x,
+  strict = TRUE,
+  n = 20,
+  minbodysizeMedian = 1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_three_white_result}{The result object from CSPThreeWhiteSoldiers analysis,
-which should be an xts object containing logical column 'ThreeWhiteSoldiers'}
+\item{strict}{If FALSE, use less strict conditions to detect pattern. Default is TRUE.}
 
-\item{pattern_color}{Color for Three White Soldiers points. Default "darkgreen".}
+\item{n}{Number of preceding candles to calculate median candle length. Default is 20.}
 
-\item{point_size}{Size for the pattern points. Default 4.}
+\item{minbodysizeMedian}{Minimum candle length in relation to the median candle length
+of \code{n} preceding candles. Default is 1.}
 
-\item{pattern_shape}{Shape for Three White Soldiers points. Default 24 (up triangle).}
-
-\item{point_alpha}{Alpha transparency for the pattern points. Default 0.8.}
-
-\item{mark_at_close}{Whether to mark at the close price. If FALSE, marks at the high. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Three White Soldiers pattern added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item ThreeWhiteSoldiers: TRUE if Three White Soldiers pattern detected
+}
 }
 \description{
-This function adds CSP Three White Soldiers pattern to a candlestick chart
-created by eCandleSticks using the results from CSPThreeWhiteSoldiers analysis.
+Identifies Three White Soldiers patterns in an Open/Close price series.
+This is a three-candle bullish reversal pattern that occurs during a downtrend.
+}
+\details{
+Number of candle lines: \bold{3}
+
+The Three White Soldiers pattern is characterized by three long white candlesticks
+stepping upward like a staircase.
+
+In strict mode (default):
+\itemize{
+\item The opening of each day is lower than the previous close but higher than the previous open
+\item Each candle must have a long body relative to the median of previous candles
+\item The pattern appears during a downtrend
+}
+
+When strict = FALSE, candle 2 and/or 3 of the formation may open higher than the
+previous day's close, thus forming a gap.
+}
+\note{
+The function filters patterns that look like three white soldiers, without considering
+the current trend direction. If only patterns in downtrends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
+addCSPThreeWhiteSoldiers(YHOO)
+addCSPThreeWhiteSoldiers(YHOO, strict = FALSE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter for three white soldiers that occur in downtrends
+ThreeWhiteSoldiers <- addCSPThreeWhiteSoldiers(YHOO) &
+  TrendDetectionChannel(lag(YHOO, k = 3))[, "DownTrend"]
 
-# Get CSP Three White Soldiers results
-csp_three_white_data <- CSPThreeWhiteSoldiers(AAPL)
+# How often does that occur?
+colSums(ThreeWhiteSoldiers, na.rm = TRUE)
+}
 
-# Add Three White Soldiers pattern
-result_with_patterns <- addCSPThreeWhiteSoldiers(result, csp_three_white_data)
-
-# Display the combined plot with pattern points
-print(result_with_patterns$combined_plot)
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.candlesticker.com/Bearish.asp}
 }
 }
+\seealso{
+\code{\link{addCSPThreeBlackCrows}}
+\code{\link{addCSPNLongWhiteCandles}}
+\code{\link{addCSPNLongWhiteCandleBodies}}
+\code{\link{addCSPThreeLineStrike}}
+
+Other pattern-3bar:
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-3bar}
+\concept{pattern-bull}

@@ -1,153 +1,146 @@
-#' Add CSP Three Methods Patterns to Candlestick Chart
+#' Rising/Falling Three Methods Candlestick Pattern
 #'
-#' This function adds CSP Three Methods patterns (Rising Three Methods and Falling Three Methods)
-#' to a candlestick chart created by eCandleSticks using the results from CSPThreeMethods analysis.
+#' Identifies Rising and Falling Three Methods patterns in an OHLC price series.
+#' These are five-candle continuation patterns that occur within existing trends.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_three_methods_result The result object from CSPThreeMethods analysis, which should be an xts object
-#'        containing logical columns 'RisingThreeMethods' and 'FallingThreeMethods'
-#' @param rising_color Color for Rising Three Methods points. Default "green".
-#' @param falling_color Color for Falling Three Methods points. Default "red".
-#' @param point_size Size for the pattern points. Default 4.
-#' @param rising_shape Shape for Rising Three Methods points. Default 24 (up triangle).
-#' @param falling_shape Shape for Falling Three Methods points. Default 25 (down triangle).
-#' @param point_alpha Alpha transparency for the pattern points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. If FALSE, marks at the high/low. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
+#' @param n Number of preceding candles to calculate median candle body length. Default is 20.
+#' @param threshold Minimum/maximum candle body length in relation to the median candle length
+#' of \code{n} preceding candle bodies. Default is 1.5.
 #'
-#' @return A modified eCandleSticks result list with Three Methods patterns added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point aes
-#' @importFrom cowplot plot_grid
-#' @importFrom xts is.xts
-#' @importFrom zoo index
+#' @details
+#' Number of candle lines: \bold{5}
+#'
+#' \strong{Rising Three Methods:}
+#' \itemize{
+#' \item Prior trend: \bold{up}
+#' \item The formation starts with a long white candle body
+#' \item The following three bars are smaller candles that open/close within the high/low span of the first candle
+#' \item The last candle is again a long white candle that closes above the close price of the first candle
+#' \item This pattern signals a potential continuation of the uptrend
+#' }
+#'
+#' \strong{Falling Three Methods:}
+#' \itemize{
+#' \item Prior trend: \bold{down}
+#' \item The formation starts with a long black candle body
+#' \item The following three bars are smaller candles that open/close within the high/low span of the first candle
+#' \item The last candle is again a long black candle that closes below the close price of the first candle
+#' \item This pattern signals a potential continuation of the downtrend
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item RisingThreeMethods: TRUE if Rising Three Methods pattern detected
+#' \item FallingThreeMethods: TRUE if Falling Three Methods pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this candlestick pattern:
+#' \itemize{
+#' \item \url{http://www.investopedia.com/terms/r/rising-three-methods.asp}
+#' \item \url{http://www.investopedia.com/terms/f/falling-three-methods.asp}
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like three methods, without considering
+#' the current trend direction. If only patterns in specific trends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("URZ", adjust = TRUE)
+#' addCSPThreeMethods(URZ)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Three Methods results
-#' csp_three_methods_data <- CSPThreeMethods(AAPL)
-#'
-#' # Add Three Methods patterns
-#' result_with_patterns <- addCSPThreeMethods(result, csp_three_methods_data)
-#'
-#' # Display the combined plot with pattern points
-#' print(result_with_patterns$combined_plot)
+#' # Filter rising three methods in uptrends
+#' addCSPThreeMethods(URZ)[, "RisingThreeMethods"] &
+#'   TrendDetectionChannel(lag(URZ, k = 5))[, "UpTrend"]
 #' }
-addCSPThreeMethods <- function(eCandleSticks_result, csp_three_methods_result,
-                               rising_color = "green", falling_color = "red",
-                               point_size = 4, rising_shape = 24, falling_shape = 25,
-                               point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_three_methods_result
-  if (!xts::is.xts(csp_three_methods_result)) {
-    stop("csp_three_methods_result must be an xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-3bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl Hi Lo
+#' @importFrom TTR runMax runMin
+#' @importFrom xts reclass xtsAttributes
+#' @importFrom stats lag
+addCSPThreeMethods <- function(x, n = 20, threshold = 1.5,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Hi(TS) && has.Lo(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Check if required columns exist
-  required_cols <- c("RisingThreeMethods", "FallingThreeMethods")
-  if (!all(required_cols %in% colnames(csp_three_methods_result))) {
-    stop("csp_three_methods_result must contain 'RisingThreeMethods' and 'FallingThreeMethods' columns")
-  }
+  LAG4TS <- LagOHLC(TS, k = 4)
+  LAG3TS <- LagOC(TS, k = 3)
+  LAG1TS <- LagOC(TS, k = 1)
 
-  # Convert to data frame
-  csp_three_methods_df <- data.frame(
-    Date = zoo::index(csp_three_methods_result),
-    as.data.frame(csp_three_methods_result)
+  MAXOP <- stats::lag(TTR::runMax(quantmod::Op(TS), n = 3), k = 1) # max open for middle 3 candles
+  MAXCL <- stats::lag(TTR::runMax(quantmod::Cl(TS), n = 3), k = 1) # max close for middle 3 candles
+  MINOP <- stats::lag(TTR::runMin(quantmod::Op(TS), n = 3), k = 1) # min open for middle 3 candles
+  MINCL <- stats::lag(TTR::runMin(quantmod::Cl(TS), n = 3), k = 1) # min close for middle 3 candles
+
+  LC4 <- addCSPLongCandleBody(LAG4TS, n = n, threshold = threshold)
+  LC0 <- addCSPLongCandleBody(TS, n = n, threshold = threshold)
+
+  RTM <- xts::reclass(
+    LC4[, 1] & # 1st candle: long white candle body
+      quantmod::Op(LAG3TS) > quantmod::Cl(LAG3TS) & # 2nd candle: black candle
+      quantmod::Op(LAG1TS) > quantmod::Cl(LAG1TS) & # 4th candle: black candle
+      MAXOP < quantmod::Hi(LAG4TS) & MAXOP > quantmod::Lo(LAG4TS) & # candle bodies 2,3,4 within range of 1st candle
+      MAXCL < quantmod::Hi(LAG4TS) & MAXCL > quantmod::Lo(LAG4TS) &
+      MINOP < quantmod::Hi(LAG4TS) & MINOP > quantmod::Lo(LAG4TS) &
+      MINCL < quantmod::Hi(LAG4TS) & MINCL > quantmod::Lo(LAG4TS) &
+      LC0[, 1] & quantmod::Cl(TS) > quantmod::Cl(LAG4TS), # 5th candle: long white candle body that closes higher than 1st candle
+    TS
   )
 
-  # Convert Date to proper format
-  csp_three_methods_df$Date <- as.Date(csp_three_methods_df$Date)
+  FTM <- xts::reclass(
+    LC4[, 2] & # 1st candle: long black candle body
+      quantmod::Op(LAG3TS) < quantmod::Cl(LAG3TS) & # 2nd candle: white candle
+      quantmod::Op(LAG1TS) < quantmod::Cl(LAG1TS) & # 4th candle: white candle
+      MAXOP < quantmod::Hi(LAG4TS) & MAXOP > quantmod::Lo(LAG4TS) & # candle bodies 2,3,4 within range of 1st candle
+      MAXCL < quantmod::Hi(LAG4TS) & MAXCL > quantmod::Lo(LAG4TS) &
+      MINOP < quantmod::Hi(LAG4TS) & MINOP > quantmod::Lo(LAG4TS) &
+      MINCL < quantmod::Hi(LAG4TS) & MINCL > quantmod::Lo(LAG4TS) &
+      LC0[, 2] & quantmod::Cl(TS) < quantmod::Cl(LAG4TS), # 5th candle: long black candle body that closes lower than 1st candle
+    TS
+  )
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_three_methods_df, by = "Date", all.x = TRUE)
+  result <- cbind(RTM, FTM)
+  colnames(result) <- c("RisingThreeMethods", "FallingThreeMethods")
+  xts::xtsAttributes(result) <- list(bars = 5)
 
-  # Extract different types of pattern points
-  rising_points <- merged_data[merged_data$RisingThreeMethods == TRUE & !is.na(merged_data$RisingThreeMethods), ]
-  falling_points <- merged_data[merged_data$FallingThreeMethods == TRUE & !is.na(merged_data$FallingThreeMethods), ]
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Determine y-value for marking
-  if (mark_at_close) {
-    rising_points$PatternLevel <- rising_points$Close
-    falling_points$PatternLevel <- falling_points$Close
-  } else {
-    # For Rising Three Methods, mark at the High price
-    # For Falling Three Methods, mark at the Low price
-    rising_points$PatternLevel <- rising_points$High
-    falling_points$PatternLevel <- falling_points$Low
-  }
-
-  # Add pattern points to the price plot
-  price_plot_with_patterns <- eCandleSticks_result$price_plot
-
-  # Add Rising Three Methods points (if any)
-  if (nrow(rising_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::geom_point(
-        data = rising_points,
-        aes(x = Date, y = PatternLevel, color = "Rising Three Methods"),
-        size = point_size,
-        shape = rising_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Falling Three Methods points (if any)
-  if (nrow(falling_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::geom_point(
-        data = falling_points,
-        aes(x = Date, y = PatternLevel, color = "Falling Three Methods"),
-        size = point_size,
-        shape = falling_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any pattern points
-  if (nrow(rising_points) > 0 || nrow(falling_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::scale_color_manual(
-        name = "CSP Three Methods Patterns",
-        values = c(
-          "Rising Three Methods" = rising_color,
-          "Falling Three Methods" = falling_color
-        ),
-        breaks = c("Rising Three Methods", "Falling Three Methods")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(rising_shape, falling_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_patterns
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_patterns, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_patterns
-  }
-
-  # Add pattern data to the output for reference
-  eCandleSticks_result$csp_three_methods_data <- csp_three_methods_df
-  eCandleSticks_result$rising_points <- rising_points
-  eCandleSticks_result$falling_points <- falling_points
-
-  return(eCandleSticks_result)
 }

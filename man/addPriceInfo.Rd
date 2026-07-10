@@ -42,7 +42,7 @@ addPriceInfo(YHOO, CSPEngulfing(YHOO))
 
 }
 \seealso{
-\code{\link{CSPNBlended}}
+\code{\link{addCSPNBlended}}
 }
 \author{
 Andreas Voellenklee

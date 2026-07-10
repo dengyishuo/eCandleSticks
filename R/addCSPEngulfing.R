@@ -1,145 +1,120 @@
-#' Add CSP Engulfing Points to Candlestick Chart
+#' Engulfing Candlestick Pattern
 #'
-#' This function adds CSP Engulfing points (Bullish Engulfing and Bearish Engulfing)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Engulfing analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Bullish and Bearish Engulfing Patterns in an Open/Close price series.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_engulfing_result The result object from CSP Engulfing analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'Bull.Engulfing' and 'Bear.Engulfing'
-#' @param bullish_engulfing_color Color for Bullish Engulfing points. Default "green".
-#' @param bearish_engulfing_color Color for Bearish Engulfing points. Default "red".
-#' @param point_size Size for the Engulfing points. Default 3.
-#' @param bullish_engulfing_shape Shape for Bullish Engulfing points. Default 24 (up triangle).
-#' @param bearish_engulfing_shape Shape for Bearish Engulfing points. Default 25 (down triangle).
-#' @param point_alpha Alpha transparency for the Engulfing points. Default 0.8.
+#' @param x xts Time Series containing Open and Close prices
 #'
-#' @return A modified eCandleSticks result list with Engulfing points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' \strong{Bullish Engulfing Pattern:}
+#' \itemize{
+#' \item Prior trend: \bold{down}
+#' \item Characterized by a large white real body engulfing a preceding small black real body
+#' \item The white body does not necessarily engulf the shadows of the black body but totally engulfs the body itself
+#' \item Appears during a downtrend
+#' }
+#'
+#' \strong{Bearish Engulfing Pattern:}
+#' \itemize{
+#' \item Prior trend: \bold{up}
+#' \item Characterized by a large black real body engulfing a preceding small white real body
+#' \item The black body does not necessarily engulf the shadows of the white body but totally engulfs the body itself
+#' \item Appears during an uptrend
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item Bull.Engulfing: TRUE if bullish engulfing pattern detected
+#' \item Bear.Engulfing: TRUE if bearish engulfing pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this candlestick pattern:
+#' \itemize{
+#' \item \url{http://thepatternsite.com/BullEngulfing.html}
+#' \item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/BullishEngulfing.html}
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like engulfing patterns, without considering
+#' the current trend direction. If only patterns in uptrends/downtrends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPEngulfing(YHOO)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Engulfing results
-#' csp_engulfing_data <- CSPEngulfing(AAPL) # This returns a data frame with Bull.Engulfing and Bear.Engulfing columns
-#'
-#' # Add Engulfing points
-#' result_with_engulfing <- addCSPEngulfing(result, csp_engulfing_data)
-#'
-#' # Display the combined plot with Engulfing points
-#' print(result_with_engulfing$combined_plot)
+#' # Filter bearish engulfing patterns that occur in uptrends
+#' addCSPEngulfing(YHOO)[, "Bear.Engulfing"] &
+#'   TrendDetectionChannel(YHOO)[, "UpTrend"]
 #' }
-addCSPEngulfing <- function(eCandleSticks_result, csp_engulfing_result,
-                            bullish_engulfing_color = "green", bearish_engulfing_color = "red",
-                            point_size = 3, bullish_engulfing_shape = 24, bearish_engulfing_shape = 25,
-                            point_alpha = 0.8) {
-  # Validate csp_engulfing_result
-  if (!is.data.frame(csp_engulfing_result) && !xts::is.xts(csp_engulfing_result)) {
-    stop("csp_engulfing_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPEngulfing <- function(x,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_engulfing_result)) {
-    csp_engulfing_result <- data.frame(
-      Date = zoo::index(csp_engulfing_result),
-      as.data.frame(csp_engulfing_result)
-    )
-  }
+  LAGTS <- LagOC(TS, k = 1)
 
-  if (!"Date" %in% colnames(csp_engulfing_result)) {
-    stop("csp_engulfing_result must contain a 'Date' column")
-  }
+  BullEngulfing <- xts::reclass(
+    quantmod::Op(LAGTS) > quantmod::Cl(LAGTS) & # First candle is black
+      quantmod::Cl(TS) > quantmod::Op(TS) & # Second candle is white
+      quantmod::Cl(LAGTS) >= quantmod::Op(TS) & # Second candle open <= first candle close
+      quantmod::Cl(TS) >= quantmod::Op(LAGTS), # Second candle close >= first candle open
+    TS
+  )
 
-  required_cols <- c("Bull.Engulfing", "Bear.Engulfing")
-  if (!all(required_cols %in% colnames(csp_engulfing_result))) {
-    stop("csp_engulfing_result must contain 'Bull.Engulfing' and 'Bear.Engulfing' columns")
-  }
+  BearEngulfing <- xts::reclass(
+    quantmod::Cl(LAGTS) > quantmod::Op(LAGTS) & # First candle is white
+      quantmod::Op(TS) > quantmod::Cl(TS) & # Second candle is black
+      quantmod::Op(LAGTS) >= quantmod::Cl(TS) & # Second candle close <= first candle open
+      quantmod::Op(TS) >= quantmod::Cl(LAGTS), # Second candle open >= first candle close
+    TS
+  )
 
-  # Convert Date to proper format if needed
-  csp_engulfing_result$Date <- as.Date(csp_engulfing_result$Date)
+  result <- cbind(BullEngulfing, BearEngulfing)
+  colnames(result) <- c("Bull.Engulfing", "Bear.Engulfing")
+  xts::xtsAttributes(result) <- list(bars = 2)
 
-  # Merge with the original data to get the Close prices
-  merged_data <- merge(eCandleSticks_result$data, csp_engulfing_result, by = "Date", all.x = TRUE)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Extract different types of Engulfing points
-  bullish_engulfing_points <- merged_data[merged_data$Bull.Engulfing == TRUE & !is.na(merged_data$Bull.Engulfing), ]
-  bearish_engulfing_points <- merged_data[merged_data$Bear.Engulfing == TRUE & !is.na(merged_data$Bear.Engulfing), ]
-
-  # Add Engulfing points to the price plot
-  price_plot_with_engulfing <- eCandleSticks_result$price_plot
-
-  # Add Bullish Engulfing points (if any)
-  if (nrow(bullish_engulfing_points) > 0) {
-    price_plot_with_engulfing <- price_plot_with_engulfing +
-      ggplot2::geom_point(
-        data = bullish_engulfing_points,
-        aes(x = Date, y = Close, color = "Bullish Engulfing"),
-        size = point_size,
-        shape = bullish_engulfing_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Bearish Engulfing points (if any)
-  if (nrow(bearish_engulfing_points) > 0) {
-    price_plot_with_engulfing <- price_plot_with_engulfing +
-      ggplot2::geom_point(
-        data = bearish_engulfing_points,
-        aes(x = Date, y = Close, color = "Bearish Engulfing"),
-        size = point_size,
-        shape = bearish_engulfing_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Engulfing points
-  if (nrow(bullish_engulfing_points) > 0 || nrow(bearish_engulfing_points) > 0) {
-    price_plot_with_engulfing <- price_plot_with_engulfing +
-      ggplot2::scale_color_manual(
-        name = "CSP Engulfing Patterns",
-        values = c(
-          "Bullish Engulfing" = bullish_engulfing_color,
-          "Bearish Engulfing" = bearish_engulfing_color
-        ),
-        breaks = c("Bullish Engulfing", "Bearish Engulfing")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(bullish_engulfing_shape, bearish_engulfing_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_engulfing
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_engulfing, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_engulfing
-  }
-
-  # Add csp_engulfing_result to the output for reference
-  eCandleSticks_result$csp_engulfing_data <- csp_engulfing_result
-  eCandleSticks_result$bullish_engulfing_points <- bullish_engulfing_points
-  eCandleSticks_result$bearish_engulfing_points <- bearish_engulfing_points
-
-  return(eCandleSticks_result)
 }

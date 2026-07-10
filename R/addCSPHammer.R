@@ -1,134 +1,100 @@
-#' Add CSP Hammer Points to Candlestick Chart
+#' Hammer Candlestick Pattern
 #'
-#' This function adds CSP Hammer points to a candlestick chart created by eCandleSticks
-#' using the results from a CSP Hammer analysis, and recombines it with the volume subplot if it exists.
+#' Identifies Hammer patterns in an OHLC price series.
+#' The hammer is a one-day bullish reversal pattern that appears during a downtrend.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_hammer_result The result object from CSP Hammer analysis, which should be a data frame
-#'        containing a 'Date' column and a logical column 'Hammer'
-#' @param hammer_color Color for Hammer points. Default "blue".
-#' @param point_size Size for the Hammer points. Default 3.
-#' @param hammer_shape Shape for Hammer points. Default 18 (diamond).
-#' @param point_alpha Alpha transparency for the Hammer points. Default 0.8.
-#' @param mark_at_low_level Whether to mark at the low price (hammer's lowest point) instead of Close price. Default TRUE.
+#' @param x xts Time Series containing Open, High, Low and Close Prices
+#' @param minlowershadowCL Minimum lower shadow to candle length ratio. Default is 2/3.
+#' @param maxuppershadowCL Maximum tolerated upper shadow to candle length ratio. Default is 0.1.
+#' @param minbodyCL Minimum body to candle length ratio. Default is 0.1.
 #'
-#' @return A modified eCandleSticks result list with Hammer points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{1}
+#'
+#' The hammer is a one-day formation expected to be an early sign for the reversal
+#' of a downtrend into an uptrend. It has:
+#' \itemize{
+#' \item A long lower shadow (at least \code{minlowershadowCL} of the candle length)
+#' \item A small body at the top of the candle (at least \code{minbodyCL} of the candle length)
+#' \item No or only a very short upper shadow (at most \code{maxuppershadowCL} of the candle length)
+#' \item The color of the body is not important
+#' }
+#'
+#' @return
+#' A xts object containing the column:
+#' \itemize{
+#' \item Hammer: TRUE if hammer pattern detected
+#' }
+#'
+#' @references
+#' The following site was used to code/document this candlestick pattern:
+#' \url{http://www.candlesticker.com/Cs18.asp}
+#'
+#' @note
+#' The function filters candles that look like hammers, without considering
+#' the current trend direction. If only hammer patterns in a downtrend should be
+#' filtered, an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPDoji}}
+#' \code{\link{TrendDetectionChannel}}
+#' \code{\link{TrendDetectionSMA}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' # Filter for hammer patterns
+#' addCSPHammer(YHOO)
 #'
-#' # Get CSP Hammer results
-#' csp_hammer_data <- CSPHammer(AAPL) # This returns a data frame with Hammer column
-#'
-#' # Add Hammer points
-#' result_with_hammer <- addCSPHammer(result, csp_hammer_data)
-#'
-#' # Display the combined plot with Hammer points
-#' print(result_with_hammer$combined_plot)
+#' # Filter for hammer patterns that occur in downtrends
+#' addCSPHammer(YHOO) & TrendDetectionChannel(YHOO)[, "DownTrend"]
 #' }
-addCSPHammer <- function(eCandleSticks_result, csp_hammer_result,
-                         hammer_color = "blue", point_size = 3,
-                         hammer_shape = 18, point_alpha = 0.8,
-                         mark_at_low_level = TRUE) {
-  # Validate csp_hammer_result
-  if (!is.data.frame(csp_hammer_result) && !xts::is.xts(csp_hammer_result)) {
-    stop("csp_hammer_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-1bar
+#' @family pattern-bull
+#' @export
+#' @importFrom quantmod Op Cl Hi Lo
+#' @importFrom xts reclass xtsAttributes
+addCSPHammer <- function(x, minlowershadowCL = 2 / 3, maxuppershadowCL = 0.1, minbodyCL = 0.1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Hi(TS) && has.Lo(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_hammer_result)) {
-    csp_hammer_result <- data.frame(
-      Date = zoo::index(csp_hammer_result),
-      as.data.frame(csp_hammer_result)
-    )
-  }
+  CL <- quantmod::Hi(TS) - quantmod::Lo(TS)
+  BodyHi <- pmax(quantmod::Op(TS), quantmod::Cl(TS))
+  BodyLo <- pmin(quantmod::Op(TS), quantmod::Cl(TS))
 
-  if (!"Date" %in% colnames(csp_hammer_result)) {
-    stop("csp_hammer_result must contain a 'Date' column")
-  }
+  Hammer <- xts::reclass(
+    (BodyLo - quantmod::Lo(TS)) > CL * minlowershadowCL & # lower shadow greater than minlowershadowCL * CandleLength
+      (quantmod::Hi(TS) - BodyHi) <= CL * maxuppershadowCL & # upper shadow missing or very short
+      abs(quantmod::Cl(TS) - quantmod::Op(TS)) > CL * minbodyCL, # Body length greater than minbodyCL * CandleLength
+    TS
+  )
 
-  if (!"Hammer" %in% colnames(csp_hammer_result)) {
-    stop("csp_hammer_result must contain a 'Hammer' column")
-  }
-
-  # Convert Date to proper format if needed
-  csp_hammer_result$Date <- as.Date(csp_hammer_result$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_hammer_result, by = "Date", all.x = TRUE)
-
-  # Extract Hammer points
-  hammer_points <- merged_data[merged_data$Hammer == TRUE & !is.na(merged_data$Hammer), ]
-
-  # Determine y-value for marking
-  if (mark_at_low_level) {
-    # For Hammer, mark at the Low price (hammer's lowest point)
-    hammer_points$HammerLevel <- hammer_points$Low
-  } else {
-    # Mark at Close price
-    hammer_points$HammerLevel <- hammer_points$Close
-  }
-
-  # Add Hammer points to the price plot
-  price_plot_with_hammer <- eCandleSticks_result$price_plot
-
-  # Add Hammer points (if any)
-  if (nrow(hammer_points) > 0) {
-    price_plot_with_hammer <- price_plot_with_hammer +
-      ggplot2::geom_point(
-        data = hammer_points,
-        aes(x = Date, y = HammerLevel, color = "Hammer"),
-        size = point_size,
-        shape = hammer_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Hammer points
-  if (nrow(hammer_points) > 0) {
-    price_plot_with_hammer <- price_plot_with_hammer +
-      ggplot2::scale_color_manual(
-        name = "CSP Patterns",
-        values = c("Hammer" = hammer_color),
-        breaks = c("Hammer")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = hammer_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_hammer
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_hammer, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_hammer
-  }
-
-  # Add csp_hammer_result to the output for reference
-  eCandleSticks_result$csp_hammer_data <- csp_hammer_result
-  eCandleSticks_result$hammer_points <- hammer_points
-
-  return(eCandleSticks_result)
+  colnames(Hammer) <- c("Hammer")
+  xts::xtsAttributes(Hammer) <- list(bars = 1)
+  return(Hammer)
 }

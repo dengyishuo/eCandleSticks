@@ -2,67 +2,192 @@
 % Please edit documentation in R/addCSPDoji.R
 \name{addCSPDoji}
 \alias{addCSPDoji}
-\title{Add CSP Doji Points to Candlestick Chart}
+\title{Doji Candlestick Pattern}
 \usage{
 addCSPDoji(
-  eCandleSticks_result,
-  csp_doji_result,
-  doji_color = "blue",
-  dragonfly_doji_color = "green",
-  gravestone_doji_color = "orange",
-  point_size = 3,
-  doji_shape = 16,
-  dragonfly_doji_shape = 15,
-  gravestone_doji_shape = 17,
-  point_alpha = 0.8
+  x,
+  maxbodyCL = 0.1,
+  maxshadowCL = 0.1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{An xts time series containing Open and Close prices}
 
-\item{csp_doji_result}{The result object from CSP Doji analysis, which should be a data frame
-containing a 'Date' column and logical columns 'Doji', 'DragonflyDoji', and 'GravestoneDoji'}
+\item{maxbodyCL}{Maximum body-to-length ratio, default = 0.1}
 
-\item{doji_color}{Color for regular Doji points. Default "blue".}
+\item{maxshadowCL}{Maximum tolerated upper (lower) shadow ratio to identify a dragonfly (gravestone) doji, default = 0.1}
 
-\item{dragonfly_doji_color}{Color for Dragonfly Doji points. Default "green".}
-
-\item{gravestone_doji_color}{Color for Gravestone Doji points. Default "orange".}
-
-\item{point_size}{Size for the Doji points. Default 3.}
-
-\item{doji_shape}{Shape for regular Doji points. Default 16 (circle).}
-
-\item{dragonfly_doji_shape}{Shape for Dragonfly Doji points. Default 15 (square).}
-
-\item{gravestone_doji_shape}{Shape for Gravestone Doji points. Default 17 (triangle).}
-
-\item{point_alpha}{Alpha transparency for the Doji points. Default 0.8.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Doji points added to the price plot
-and the combined plot updated accordingly.
+An xts object containing the following columns:
+\itemize{
+\item \code{Doji}: TRUE if a Doji pattern is detected
+\item \code{DragonflyDoji}: TRUE if a Dragonfly Doji pattern is detected
+\item \code{GravestoneDoji}: TRUE if a Gravestone Doji pattern is detected
+}
 }
 \description{
-This function adds CSP Doji points (including Dragonfly Doji and Gravestone Doji)
-to a candlestick chart created by eCandleSticks using the results from a CSP Doji analysis,
-and recombines it with the volume subplot if it exists.
+Identify Doji Patterns in an OHLC price series
+}
+\details{
+Number of candle lines: \strong{1}
+
+A Doji is formed when the open and close prices are the same or very close. By default settings, a Doji is identified when the body of the candle is smaller than or equal to 1/10 of its full length.
+
+The bullish Dragonfly Doji pattern has a long lower shadow but almost no upper shadow. Conversely, the bearish Gravestone Doji has a long upper shadow but almost no lower shadow. Dragonfly Doji and Gravestone Doji can be reversal signals during downtrends/uptrends.
+}
+\note{
+This function only filters candlesticks that resemble Doji patterns, without considering the current trend direction. To filter for Doji patterns in an uptrend, an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+# Obtain example data
+getSymbols("YHOO", adjust = TRUE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Identify Doji patterns
+addCSPDoji(YHOO)
 
-# Get CSP Doji results
-csp_doji_data <- CSPDoji(AAPL) # This returns a data frame with Doji, DragonflyDoji, and GravestoneDoji columns
+# Filter for Doji patterns where the open price equals the close price
+addCSPDoji(YHOO, maxbodyCL = 0)
 
-# Add Doji points
-result_with_doji <- addCSPDoji(result, csp_doji_data)
+# Filter for Gravestone Doji patterns in an uptrend
+addCSPDoji(YHOO)[, "GravestoneDoji"] & TrendDetectionChannel(YHOO)[, "UpTrend"]
+}
 
-# Display the combined plot with Doji points
-print(result_with_doji$combined_plot)
+}
+\references{
+Reference sites used for coding/documenting this candlestick pattern:
+\itemize{
+\item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/Doji.html}
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.candlesticker.com/Bearish.asp}
 }
 }
+\seealso{
+Other pattern-1bar:
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}}
+
+Other pattern-bull:
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-1bar}
+\concept{pattern-bear}
+\concept{pattern-bull}

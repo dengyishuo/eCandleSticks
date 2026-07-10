@@ -1,126 +1,133 @@
-#' Add CSP Three White Soldiers Pattern to Candlestick Chart
+#' Three White Soldiers Candlestick Pattern
 #'
-#' This function adds CSP Three White Soldiers pattern to a candlestick chart
-#' created by eCandleSticks using the results from CSPThreeWhiteSoldiers analysis.
+#' Identifies Three White Soldiers patterns in an Open/Close price series.
+#' This is a three-candle bullish reversal pattern that occurs during a downtrend.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_three_white_result The result object from CSPThreeWhiteSoldiers analysis,
-#'        which should be an xts object containing logical column 'ThreeWhiteSoldiers'
-#' @param pattern_color Color for Three White Soldiers points. Default "darkgreen".
-#' @param point_size Size for the pattern points. Default 4.
-#' @param pattern_shape Shape for Three White Soldiers points. Default 24 (up triangle).
-#' @param point_alpha Alpha transparency for the pattern points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. If FALSE, marks at the high. Default TRUE.
+#' @param x xts Time Series containing Open and Close prices
+#' @param strict If FALSE, use less strict conditions to detect pattern. Default is TRUE.
+#' @param n Number of preceding candles to calculate median candle length. Default is 20.
+#' @param minbodysizeMedian Minimum candle length in relation to the median candle length
+#' of \code{n} preceding candles. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with Three White Soldiers pattern added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point aes
-#' @importFrom cowplot plot_grid
-#' @importFrom xts is.xts
-#' @importFrom zoo index
+#' @details
+#' Number of candle lines: \bold{3}
+#'
+#' The Three White Soldiers pattern is characterized by three long white candlesticks
+#' stepping upward like a staircase.
+#'
+#' In strict mode (default):
+#' \itemize{
+#' \item The opening of each day is lower than the previous close but higher than the previous open
+#' \item Each candle must have a long body relative to the median of previous candles
+#' \item The pattern appears during a downtrend
+#' }
+#'
+#' When strict = FALSE, candle 2 and/or 3 of the formation may open higher than the
+#' previous day's close, thus forming a gap.
+#'
+#' @return
+#' A xts object containing the column:
+#' \itemize{
+#' \item ThreeWhiteSoldiers: TRUE if Three White Soldiers pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like three white soldiers, without considering
+#' the current trend direction. If only patterns in downtrends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPThreeBlackCrows}}
+#' \code{\link{addCSPNLongWhiteCandles}}
+#' \code{\link{addCSPNLongWhiteCandleBodies}}
+#' \code{\link{addCSPThreeLineStrike}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPThreeWhiteSoldiers(YHOO)
+#' addCSPThreeWhiteSoldiers(YHOO, strict = FALSE)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' # Filter for three white soldiers that occur in downtrends
+#' ThreeWhiteSoldiers <- addCSPThreeWhiteSoldiers(YHOO) &
+#'   TrendDetectionChannel(lag(YHOO, k = 3))[, "DownTrend"]
 #'
-#' # Get CSP Three White Soldiers results
-#' csp_three_white_data <- CSPThreeWhiteSoldiers(AAPL)
-#'
-#' # Add Three White Soldiers pattern
-#' result_with_patterns <- addCSPThreeWhiteSoldiers(result, csp_three_white_data)
-#'
-#' # Display the combined plot with pattern points
-#' print(result_with_patterns$combined_plot)
+#' # How often does that occur?
+#' colSums(ThreeWhiteSoldiers, na.rm = TRUE)
 #' }
-addCSPThreeWhiteSoldiers <- function(eCandleSticks_result, csp_three_white_result,
-                                     pattern_color = "darkgreen", point_size = 4,
-                                     pattern_shape = 24, point_alpha = 0.8,
-                                     mark_at_close = TRUE) {
-  # Validate csp_three_white_result
-  if (!xts::is.xts(csp_three_white_result)) {
-    stop("csp_three_white_result must be an xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-3bar
+#' @family pattern-bull
+#' @export
+#' @importFrom quantmod Op Cl is.OHLC
+#' @importFrom xts reclass xtsAttributes
+#' @importFrom stats lag
+addCSPThreeWhiteSoldiers <- function(x, strict = TRUE, n = 20, minbodysizeMedian = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!quantmod::is.OHLC(TS)) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Check if required column exists
-  required_col <- "ThreeWhiteSoldiers"
-  if (!required_col %in% colnames(csp_three_white_result)) {
-    stop("csp_three_white_result must contain 'ThreeWhiteSoldiers' column")
-  }
+  THREELWCB <- addCSPNLongWhiteCandleBodies(TS, N = 3, n = n, threshold = minbodysizeMedian)
 
-  # Convert to data frame
-  csp_three_white_df <- data.frame(
-    Date = zoo::index(csp_three_white_result),
-    as.data.frame(csp_three_white_result)
+  lagged_oc <- do.call(merge, lapply(0:2, function(k) {
+    merge(stats::lag(quantmod::Op(TS), -k), stats::lag(quantmod::Cl(TS), -k))
+  }))
+
+  colnames(lagged_oc) <- c("Op.L0", "Cl.L0", "Op.L1", "Cl.L1", "Op.L2", "Cl.L2")
+
+  result <- xts::reclass(
+    THREELWCB[, 1] &
+      lagged_oc$Op.L0 > lagged_oc$Op.L1 &
+      lagged_oc$Op.L1 > lagged_oc$Op.L2 &
+      lagged_oc$Cl.L0 > lagged_oc$Cl.L1 &
+      lagged_oc$Cl.L1 > lagged_oc$Cl.L2,
+    TS
   )
 
-  # Convert Date to proper format
-  csp_three_white_df$Date <- as.Date(csp_three_white_df$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_three_white_df, by = "Date", all.x = TRUE)
-
-  # Extract pattern points
-  pattern_points <- merged_data[merged_data$ThreeWhiteSoldiers == TRUE & !is.na(merged_data$ThreeWhiteSoldiers), ]
-
-  # Determine y-value for marking
-  if (mark_at_close) {
-    pattern_points$PatternLevel <- pattern_points$Close
-  } else {
-    # Mark at the High price
-    pattern_points$PatternLevel <- pattern_points$High
+  if (strict) {
+    result <- result &
+      lagged_oc$Op.L0 <= lagged_oc$Cl.L1 &
+      lagged_oc$Op.L1 <= lagged_oc$Cl.L2
   }
 
-  # Add pattern points to the price plot
-  price_plot_with_patterns <- eCandleSticks_result$price_plot
+  colnames(result) <- "ThreeWhiteSoldiers"
+  xts::xtsAttributes(result) <- list(bars = 3)
 
-  # Add Three White Soldiers points (if any)
-  if (nrow(pattern_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::geom_point(
-        data = pattern_points,
-        aes(x = Date, y = PatternLevel, color = "Three White Soldiers"),
-        size = point_size,
-        shape = pattern_shape,
-        alpha = point_alpha
-      ) +
-      ggplot2::scale_color_manual(
-        name = "CSP Three White Soldiers Pattern",
-        values = c("Three White Soldiers" = pattern_color),
-        breaks = c("Three White Soldiers")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = pattern_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_patterns
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_patterns, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_patterns
-  }
-
-  # Add pattern data to the output for reference
-  eCandleSticks_result$csp_three_white_data <- csp_three_white_df
-  eCandleSticks_result$pattern_points <- pattern_points
-
-  return(eCandleSticks_result)
 }

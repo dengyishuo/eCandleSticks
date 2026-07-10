@@ -1,162 +1,126 @@
-#' Add CSP Doji Points to Candlestick Chart
+#' Doji Candlestick Pattern
 #'
-#' This function adds CSP Doji points (including Dragonfly Doji and Gravestone Doji)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Doji analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identify Doji Patterns in an OHLC price series
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_doji_result The result object from CSP Doji analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'Doji', 'DragonflyDoji', and 'GravestoneDoji'
-#' @param doji_color Color for regular Doji points. Default "blue".
-#' @param dragonfly_doji_color Color for Dragonfly Doji points. Default "green".
-#' @param gravestone_doji_color Color for Gravestone Doji points. Default "orange".
-#' @param point_size Size for the Doji points. Default 3.
-#' @param doji_shape Shape for regular Doji points. Default 16 (circle).
-#' @param dragonfly_doji_shape Shape for Dragonfly Doji points. Default 15 (square).
-#' @param gravestone_doji_shape Shape for Gravestone Doji points. Default 17 (triangle).
-#' @param point_alpha Alpha transparency for the Doji points. Default 0.8.
+#' @param x An xts time series containing Open and Close prices
+#' @param maxbodyCL Maximum body-to-length ratio, default = 0.1
+#' @param maxshadowCL Maximum tolerated upper (lower) shadow ratio to identify a dragonfly (gravestone) doji, default = 0.1
 #'
-#' @return A modified eCandleSticks result list with Doji points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \strong{1}
+#'
+#' A Doji is formed when the open and close prices are the same or very close. By default settings, a Doji is identified when the body of the candle is smaller than or equal to 1/10 of its full length.
+#'
+#' The bullish Dragonfly Doji pattern has a long lower shadow but almost no upper shadow. Conversely, the bearish Gravestone Doji has a long upper shadow but almost no lower shadow. Dragonfly Doji and Gravestone Doji can be reversal signals during downtrends/uptrends.
+#'
+#' @return An xts object containing the following columns:
+#' \itemize{
+#' \item \code{Doji}: TRUE if a Doji pattern is detected
+#' \item \code{DragonflyDoji}: TRUE if a Dragonfly Doji pattern is detected
+#' \item \code{GravestoneDoji}: TRUE if a Gravestone Doji pattern is detected
+#' }
+#'
+#' @author Andreas Voellenklee
+#' @references
+#' Reference sites used for coding/documenting this candlestick pattern:
+#' \itemize{
+#' \item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/Doji.html}
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' This function only filters candlesticks that resemble Doji patterns, without considering the current trend direction. To filter for Doji patterns in an uptrend, an external trend detection function must be used. See examples.
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' # Obtain example data
+#' getSymbols("YHOO", adjust = TRUE)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' # Identify Doji patterns
+#' addCSPDoji(YHOO)
 #'
-#' # Get CSP Doji results
-#' csp_doji_data <- CSPDoji(AAPL) # This returns a data frame with Doji, DragonflyDoji, and GravestoneDoji columns
+#' # Filter for Doji patterns where the open price equals the close price
+#' addCSPDoji(YHOO, maxbodyCL = 0)
 #'
-#' # Add Doji points
-#' result_with_doji <- addCSPDoji(result, csp_doji_data)
-#'
-#' # Display the combined plot with Doji points
-#' print(result_with_doji$combined_plot)
+#' # Filter for Gravestone Doji patterns in an uptrend
+#' addCSPDoji(YHOO)[, "GravestoneDoji"] & TrendDetectionChannel(YHOO)[, "UpTrend"]
 #' }
-addCSPDoji <- function(eCandleSticks_result, csp_doji_result,
-                       doji_color = "blue", dragonfly_doji_color = "green", gravestone_doji_color = "orange",
-                       point_size = 3, doji_shape = 16, dragonfly_doji_shape = 15, gravestone_doji_shape = 17,
-                       point_alpha = 0.8) {
-  # Validate csp_doji_result
-  if (!is.data.frame(csp_doji_result) && !xts::is.xts(csp_doji_result)) {
-    stop("csp_doji_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-1bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+addCSPDoji <- function(x, maxbodyCL = .1, maxshadowCL = .1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  #  Validate input data contains OHLC data
+
+  if (!quantmod::is.OHLC(TS)) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_doji_result)) {
-    csp_doji_result <- data.frame(
-      Date = zoo::index(csp_doji_result),
-      as.data.frame(csp_doji_result)
-    )
-  }
+  #  Calculate candlestick body length (absolute difference between Close and Open prices)
 
-  if (!"Date" %in% colnames(csp_doji_result)) {
-    stop("csp_doji_result must contain a 'Date' column")
-  }
+  BL <- abs(quantmod::Cl(TS) - quantmod::Op(TS))
 
-  required_cols <- c("Doji", "DragonflyDoji", "GravestoneDoji")
-  if (!all(required_cols %in% colnames(csp_doji_result))) {
-    stop("csp_doji_result must contain 'Doji', 'DragonflyDoji', and 'GravestoneDoji' columns")
-  }
+  #  Calculate total candlestick length (High - Low)
 
-  # Convert Date to proper format if needed
-  csp_doji_result$Date <- as.Date(csp_doji_result$Date)
+  CL <- quantmod::Hi(TS) - quantmod::Lo(TS)
 
-  # Merge with the original data to get the Close prices
-  merged_data <- merge(eCandleSticks_result$data, csp_doji_result, by = "Date", all.x = TRUE)
+  # Determine the high point of the candlestick body (maximum of Open/Close)
 
-  # Extract different types of Doji points
-  doji_points <- merged_data[merged_data$Doji == TRUE & !is.na(merged_data$Doji), ]
-  dragonfly_doji_points <- merged_data[merged_data$DragonflyDoji == TRUE & !is.na(merged_data$DragonflyDoji), ]
-  gravestone_doji_points <- merged_data[merged_data$GravestoneDoji == TRUE & !is.na(merged_data$GravestoneDoji), ]
+  BodyHi <- pmax(quantmod::Op(TS), quantmod::Cl(TS))
 
-  # Add Doji points to the price plot
-  price_plot_with_doji <- eCandleSticks_result$price_plot
+  #  Determine the low point of the candlestick body (minimum of Open/Close)
 
-  # Add regular Doji points (if any)
-  if (nrow(doji_points) > 0) {
-    price_plot_with_doji <- price_plot_with_doji +
-      ggplot2::geom_point(
-        data = doji_points,
-        aes(x = Date, y = Close, color = "Doji"),
-        size = point_size,
-        shape = doji_shape,
-        alpha = point_alpha
-      )
-  }
+  BodyLo <- pmin(quantmod::Op(TS), quantmod::Cl(TS))
 
-  # Add Dragonfly Doji points (if any)
-  if (nrow(dragonfly_doji_points) > 0) {
-    price_plot_with_doji <- price_plot_with_doji +
-      ggplot2::geom_point(
-        data = dragonfly_doji_points,
-        aes(x = Date, y = Close, color = "Dragonfly Doji"),
-        size = point_size,
-        shape = dragonfly_doji_shape,
-        alpha = point_alpha
-      )
-  }
+  #  Identify standard Doji
 
-  # Add Gravestone Doji points (if any)
-  if (nrow(gravestone_doji_points) > 0) {
-    price_plot_with_doji <- price_plot_with_doji +
-      ggplot2::geom_point(
-        data = gravestone_doji_points,
-        aes(x = Date, y = Close, color = "Gravestone Doji"),
-        size = point_size,
-        shape = gravestone_doji_shape,
-        alpha = point_alpha
-      )
-  }
+  Doji <- xts::reclass(BL < CL * maxbodyCL, TS)
 
-  # Add color scale and legend only if there are any Doji points
-  if (nrow(doji_points) > 0 || nrow(dragonfly_doji_points) > 0 || nrow(gravestone_doji_points) > 0) {
-    price_plot_with_doji <- price_plot_with_doji +
-      ggplot2::scale_color_manual(
-        name = "CSP Doji Patterns",
-        values = c(
-          "Doji" = doji_color,
-          "Dragonfly Doji" = dragonfly_doji_color,
-          "Gravestone Doji" = gravestone_doji_color
-        ),
-        breaks = c("Doji", "Dragonfly Doji", "Gravestone Doji")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(doji_shape, dragonfly_doji_shape, gravestone_doji_shape),
-            size = rep(point_size, 3),
-            alpha = rep(point_alpha, 3)
-          )
-        )
-      )
-  }
+  #  Identify Dragonfly Doji (standard Doji + minimal upper shadow)
 
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_doji
+  DFDoji <- xts::reclass(Doji & (quantmod::Hi(TS) - BodyHi <= CL * maxshadowCL), TS)
 
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_doji, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_doji
-  }
+  #  Identify Gravestone Doji (standard Doji + minimal lower shadow)
 
-  # Add csp_doji_result to the output for reference
-  eCandleSticks_result$csp_doji_data <- csp_doji_result
-  eCandleSticks_result$doji_points <- doji_points
-  eCandleSticks_result$dragonfly_doji_points <- dragonfly_doji_points
-  eCandleSticks_result$gravestone_doji_points <- gravestone_doji_points
+  GSDoji <- xts::reclass(Doji & (BodyLo - quantmod::Lo(TS) <= CL * maxshadowCL), TS)
 
-  return(eCandleSticks_result)
+  #  Combine results and set column names
+
+  result <- cbind(Doji, DFDoji, GSDoji)
+  colnames(result) <- c("Doji", "DragonflyDoji", "GravestoneDoji")
+
+  #  Add attribute to mark that this pattern requires 1 candlestick
+
+  xts::xtsAttributes(result) <- list(bars = 1)
+
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
+
 }

@@ -1,157 +1,115 @@
-#' Add CSP Marubozu Points to Candlestick Chart
+#' Marubozu Candlestick Pattern
 #'
-#' This function adds CSP Marubozu points (White Marubozu and Black Marubozu)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Marubozu analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Marubozu candlestick patterns in an OHLC price series.
+#' Marubozu candles have long bodies with very small or no shadows.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_marubozu_result The result object from CSP Marubozu analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'WhiteMarubozu' and 'BlackMarubozu'
-#' @param white_marubozu_color Color for White Marubozu points. Default "green".
-#' @param black_marubozu_color Color for Black Marubozu points. Default "red".
-#' @param point_size Size for the Marubozu points. Default 3.
-#' @param white_marubozu_shape Shape for White Marubozu points. Default 15 (filled square).
-#' @param black_marubozu_shape Shape for Black Marubozu points. Default 15 (filled square).
-#' @param point_alpha Alpha transparency for the Marubozu points. Default 0.8.
-#' @param mark_at_body_center Whether to mark at the center of the candle body instead of Close price. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
+#' @param n Number of preceding candles to calculate Average True Range. Default is 20.
+#' @param ATRFactor Minimum size of candle body compared to the ATR. Default is 1.
+#' @param maxuppershadowCL Maximum tolerated upper shadow to candle length ratio. Default is 0.1.
+#' @param maxlowershadowCL Maximum tolerated lower shadow to candle length ratio. Default is 0.1.
 #'
-#' @return A modified eCandleSticks result list with Marubozu points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{1}
+#'
+#' \strong{White Marubozu:}
+#' A long white candle that has no shadows or only small shadows on either end.
+#'
+#' \strong{Black Marubozu:}
+#' A long black candle that has no shadows or only small shadows on either end.
+#'
+#' In default settings, the candle \emph{body} length must be greater than the average
+#' true range of last \code{n} periods. The threshold can be varied by \code{ATRFactor}.
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item WhiteMarubozu: TRUE if pattern detected
+#' \item BlackMarubozu: TRUE if pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @seealso
+#' \code{\link{CandleBodyLength}}
+#' \code{\link[TTR]{ATR}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' addCSPMarubozu(YHOO)
 #'
-#' # Get CSP Marubozu results
-#' csp_marubozu_data <- CSPMarubozu(AAPL) # This returns a data frame with WhiteMarubozu and BlackMarubozu columns
+#' # Include not-so-long-marubozus
+#' addCSPMarubozu(YHOO, ATRFactor = 0.8)
 #'
-#' # Add Marubozu points
-#' result_with_marubozu <- addCSPMarubozu(result, csp_marubozu_data)
-#'
-#' # Display the combined plot with Marubozu points
-#' print(result_with_marubozu$combined_plot)
+#' # Filter for white closing marubozus (Cl(TS) = Hi(TS))
+#' addCSPMarubozu(YHOO, maxuppershadowCL = 0)[, "WhiteMarubozu"]
 #' }
-addCSPMarubozu <- function(eCandleSticks_result, csp_marubozu_result,
-                           white_marubozu_color = "green", black_marubozu_color = "red",
-                           point_size = 3, white_marubozu_shape = 15, black_marubozu_shape = 15,
-                           point_alpha = 0.8, mark_at_body_center = TRUE) {
-  # Validate csp_marubozu_result
-  if (!is.data.frame(csp_marubozu_result) && !xts::is.xts(csp_marubozu_result)) {
-    stop("csp_marubozu_result must be a data frame or xts object")
+#'
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-1bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @importFrom xts reclass xtsAttributes `xtsAttributes<-`
+#' @importFrom quantmod Op Cl Hi Lo
+#' @importFrom TTR ATR
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @export
+addCSPMarubozu <- function(x, n = 20, ATRFactor = 1, maxuppershadowCL = 0.1,
+                        maxlowershadowCL = 0.1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
   }
+  TS <- x
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_marubozu_result)) {
-    csp_marubozu_result <- data.frame(
-      Date = zoo::index(csp_marubozu_result),
-      as.data.frame(csp_marubozu_result)
-    )
+  if (!is.OHLC(TS)) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
+  LongCandle <- CandleBodyLength(TS)[, "absCandleBodyLength"] >
+    ATR(cbind(Hi(TS), Lo(TS), Cl(TS)), n = n, maType = "SMA")[
+      ,
+      "atr"
+    ] * ATRFactor
+  CL <- Hi(TS) - Lo(TS)
+  BodyHi <- pmax(Op(TS), Cl(TS))
+  BodyLo <- pmin(Op(TS), Cl(TS))
+  ShortShadow <- Hi(TS) - BodyHi <= CL * maxuppershadowCL &
+    BodyLo - Lo(TS) <= CL * maxlowershadowCL
+  WhiteMarubozu <- reclass(LongCandle & ShortShadow & Op(TS) <
+    Cl(TS), TS)
+  BlackMarubozu <- reclass(LongCandle & ShortShadow & Op(TS) >
+    Cl(TS), TS)
+  result <- cbind(WhiteMarubozu, BlackMarubozu)
+  colnames(result) <- c("WhiteMarubozu", "BlackMarubozu")
+  xtsAttributes(result) <- list(bars = 1)
 
-  if (!"Date" %in% colnames(csp_marubozu_result)) {
-    stop("csp_marubozu_result must contain a 'Date' column")
-  }
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  required_cols <- c("WhiteMarubozu", "BlackMarubozu")
-  if (!all(required_cols %in% colnames(csp_marubozu_result))) {
-    stop("csp_marubozu_result must contain 'WhiteMarubozu' and 'BlackMarubozu' columns")
-  }
-
-  # Convert Date to proper format if needed
-  csp_marubozu_result$Date <- as.Date(csp_marubozu_result$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_marubozu_result, by = "Date", all.x = TRUE)
-
-  # Extract different types of Marubozu points
-  white_marubozu_points <- merged_data[merged_data$WhiteMarubozu == TRUE & !is.na(merged_data$WhiteMarubozu), ]
-  black_marubozu_points <- merged_data[merged_data$BlackMarubozu == TRUE & !is.na(merged_data$BlackMarubozu), ]
-
-  # Determine y-value for marking
-  if (mark_at_body_center) {
-    # Mark at the center of the candle body
-    white_marubozu_points$MarubozuLevel <- (white_marubozu_points$Open + white_marubozu_points$Close) / 2
-    black_marubozu_points$MarubozuLevel <- (black_marubozu_points$Open + black_marubozu_points$Close) / 2
-  } else {
-    # Mark at Close price
-    white_marubozu_points$MarubozuLevel <- white_marubozu_points$Close
-    black_marubozu_points$MarubozuLevel <- black_marubozu_points$Close
-  }
-
-  # Add Marubozu points to the price plot
-  price_plot_with_marubozu <- eCandleSticks_result$price_plot
-
-  # Add White Marubozu points (if any)
-  if (nrow(white_marubozu_points) > 0) {
-    price_plot_with_marubozu <- price_plot_with_marubozu +
-      ggplot2::geom_point(
-        data = white_marubozu_points,
-        aes(x = Date, y = MarubozuLevel, color = "White Marubozu"),
-        size = point_size,
-        shape = white_marubozu_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Black Marubozu points (if any)
-  if (nrow(black_marubozu_points) > 0) {
-    price_plot_with_marubozu <- price_plot_with_marubozu +
-      ggplot2::geom_point(
-        data = black_marubozu_points,
-        aes(x = Date, y = MarubozuLevel, color = "Black Marubozu"),
-        size = point_size,
-        shape = black_marubozu_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Marubozu points
-  if (nrow(white_marubozu_points) > 0 || nrow(black_marubozu_points) > 0) {
-    price_plot_with_marubozu <- price_plot_with_marubozu +
-      ggplot2::scale_color_manual(
-        name = "CSP Marubozu Patterns",
-        values = c(
-          "White Marubozu" = white_marubozu_color,
-          "Black Marubozu" = black_marubozu_color
-        ),
-        breaks = c("White Marubozu", "Black Marubozu")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(white_marubozu_shape, black_marubozu_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_marubozu
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_marubozu, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_marubozu
-  }
-
-  # Add csp_marubozu_result to the output for reference
-  eCandleSticks_result$csp_marubozu_data <- csp_marubozu_result
-  eCandleSticks_result$white_marubozu_points <- white_marubozu_points
-  eCandleSticks_result$black_marubozu_points <- black_marubozu_points
-
-  return(eCandleSticks_result)
 }

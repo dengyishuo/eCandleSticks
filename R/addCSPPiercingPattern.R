@@ -1,135 +1,103 @@
-#' Add CSP Piercing Pattern Points to Candlestick Chart
+#' Piercing Candlestick Pattern
 #'
-#' This function adds CSP Piercing Pattern points to a candlestick chart
-#' created by eCandleSticks using the results from a CSP Piercing Pattern analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Piercing Patterns in an Open/Close price series.
+#' This is a two-candle bullish reversal pattern that occurs during a downtrend.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_piercing_pattern_result The result object from CSP Piercing Pattern analysis,
-#'        which should be a data frame containing a 'Date' column and a logical column 'PiercingPattern'
-#' @param piercing_pattern_color Color for Piercing Pattern points. Default "blue".
-#' @param point_size Size for the Piercing Pattern points. Default 3.
-#' @param piercing_pattern_shape Shape for Piercing Pattern points. Default 21 (filled circle with border).
-#' @param point_alpha Alpha transparency for the Piercing Pattern points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. Default TRUE.
+#' @param x xts Time Series containing Open and Close Prices
+#' @param n Number of preceding candles to calculate median candle body length. Default is 20.
+#' @param minbodysizeMedian Minimum body length relative to the median of the past \code{n} body sizes. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with Piercing Pattern points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' A Piercing Pattern consists of:
+#' \enumerate{
+#' \item A long black candlestick (first candle)
+#' \item A gap lower opening on the next day
+#' \item A white candlestick that closes more than halfway into the prior black candlestick's real body
+#' \item The close of the second candle is still below the open of the first candle
+#' }
+#'
+#' This pattern is considered a bullish reversal signal when it appears during a downtrend.
+#'
+#' @return
+#' A xts object containing the column:
+#' \itemize{
+#' \item PiercingPattern: TRUE if Piercing Pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/PiercingPattern.html}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like piercing patterns, without considering
+#' the current trend direction. If only patterns in downtrends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' The counterpart of this pattern is \code{\link{addCSPDarkCloudCover}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPPiercingPattern(YHOO)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Piercing Pattern results
-#' csp_piercing_pattern_data <- CSPPiercingPattern(AAPL) # This returns a data frame with PiercingPattern column
-#'
-#' # Add Piercing Pattern points
-#' result_with_piercing_pattern <- addCSPPiercingPattern(result, csp_piercing_pattern_data)
-#'
-#' # Display the combined plot with Piercing Pattern points
-#' print(result_with_piercing_pattern$combined_plot)
+#' # Filter piercing patterns that occur in downtrends.
+#' # The lag of 2 periods of the time series for trend detection
+#' # ensures that the downtrend is active before the
+#' # piercing pattern occurs.
+#' addCSPPiercingPattern(YHOO) &
+#'   TrendDetectionChannel(lag(YHOO, k = 2))[, "DownTrend"]
 #' }
-addCSPPiercingPattern <- function(eCandleSticks_result, csp_piercing_pattern_result,
-                                  piercing_pattern_color = "blue", point_size = 3,
-                                  piercing_pattern_shape = 21, point_alpha = 0.8,
-                                  mark_at_close = TRUE) {
-  # Validate csp_piercing_pattern_result
-  if (!is.data.frame(csp_piercing_pattern_result) && !xts::is.xts(csp_piercing_pattern_result)) {
-    stop("csp_piercing_pattern_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPPiercingPattern <- function(x, n = 20, minbodysizeMedian = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_piercing_pattern_result)) {
-    csp_piercing_pattern_result <- data.frame(
-      Date = zoo::index(csp_piercing_pattern_result),
-      as.data.frame(csp_piercing_pattern_result)
-    )
-  }
+  LAGTS <- LagOC(TS, k = 1)
+  LongCandleBody <- addCSPLongCandleBody(LAGTS, n = n, threshold = minbodysizeMedian)
 
-  if (!"Date" %in% colnames(csp_piercing_pattern_result)) {
-    stop("csp_piercing_pattern_result must contain a 'Date' column")
-  }
+  PiercingPattern <- xts::reclass(
+    LongCandleBody[, "LongBlackCandleBody"] & # first candle is black and longer than median of past n candles
+      quantmod::Op(TS) < quantmod::Cl(LAGTS) & # second candle opens lower than close of 1st candle
+      quantmod::Cl(TS) >= (quantmod::Op(LAGTS) + quantmod::Cl(LAGTS)) / 2 & # second candle closes at or higher than half of 1st candles' body
+      quantmod::Cl(TS) < quantmod::Op(LAGTS), # close of second candle is lower than open of 1st candle
+    TS
+  )
 
-  if (!"PiercingPattern" %in% colnames(csp_piercing_pattern_result)) {
-    stop("csp_piercing_pattern_result must contain a 'PiercingPattern' column")
-  }
-
-  # Convert Date to proper format if needed
-  csp_piercing_pattern_result$Date <- as.Date(csp_piercing_pattern_result$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_piercing_pattern_result, by = "Date", all.x = TRUE)
-
-  # Extract Piercing Pattern points
-  piercing_pattern_points <- merged_data[merged_data$PiercingPattern == TRUE & !is.na(merged_data$PiercingPattern), ]
-
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    piercing_pattern_points$PiercingPatternLevel <- piercing_pattern_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    piercing_pattern_points$PiercingPatternLevel <- (piercing_pattern_points$High + piercing_pattern_points$Low) / 2
-  }
-
-  # Add Piercing Pattern points to the price plot
-  price_plot_with_piercing_pattern <- eCandleSticks_result$price_plot
-
-  # Add Piercing Pattern points (if any)
-  if (nrow(piercing_pattern_points) > 0) {
-    price_plot_with_piercing_pattern <- price_plot_with_piercing_pattern +
-      ggplot2::geom_point(
-        data = piercing_pattern_points,
-        aes(x = Date, y = PiercingPatternLevel, color = "Piercing Pattern"),
-        size = point_size,
-        shape = piercing_pattern_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Piercing Pattern points
-  if (nrow(piercing_pattern_points) > 0) {
-    price_plot_with_piercing_pattern <- price_plot_with_piercing_pattern +
-      ggplot2::scale_color_manual(
-        name = "CSP Patterns",
-        values = c("Piercing Pattern" = piercing_pattern_color),
-        breaks = c("Piercing Pattern")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = piercing_pattern_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_piercing_pattern
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_piercing_pattern, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_piercing_pattern
-  }
-
-  # Add csp_piercing_pattern_result to the output for reference
-  eCandleSticks_result$csp_piercing_pattern_data <- csp_piercing_pattern_result
-  eCandleSticks_result$piercing_pattern_points <- piercing_pattern_points
-
-  return(eCandleSticks_result)
+  colnames(PiercingPattern) <- c("PiercingPattern")
+  xts::xtsAttributes(PiercingPattern) <- list(bars = 2)
+  return(PiercingPattern)
 }

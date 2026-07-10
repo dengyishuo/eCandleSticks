@@ -2,64 +2,200 @@
 % Please edit documentation in R/addCSPMarubozu.R
 \name{addCSPMarubozu}
 \alias{addCSPMarubozu}
-\title{Add CSP Marubozu Points to Candlestick Chart}
+\title{Marubozu Candlestick Pattern}
 \usage{
 addCSPMarubozu(
-  eCandleSticks_result,
-  csp_marubozu_result,
-  white_marubozu_color = "green",
-  black_marubozu_color = "red",
-  point_size = 3,
-  white_marubozu_shape = 15,
-  black_marubozu_shape = 15,
-  point_alpha = 0.8,
-  mark_at_body_center = TRUE
+  x,
+  n = 20,
+  ATRFactor = 1,
+  maxuppershadowCL = 0.1,
+  maxlowershadowCL = 0.1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing OHLC prices}
 
-\item{csp_marubozu_result}{The result object from CSP Marubozu analysis, which should be a data frame
-containing a 'Date' column and logical columns 'WhiteMarubozu' and 'BlackMarubozu'}
+\item{n}{Number of preceding candles to calculate Average True Range. Default is 20.}
 
-\item{white_marubozu_color}{Color for White Marubozu points. Default "green".}
+\item{ATRFactor}{Minimum size of candle body compared to the ATR. Default is 1.}
 
-\item{black_marubozu_color}{Color for Black Marubozu points. Default "red".}
+\item{maxuppershadowCL}{Maximum tolerated upper shadow to candle length ratio. Default is 0.1.}
 
-\item{point_size}{Size for the Marubozu points. Default 3.}
+\item{maxlowershadowCL}{Maximum tolerated lower shadow to candle length ratio. Default is 0.1.}
 
-\item{white_marubozu_shape}{Shape for White Marubozu points. Default 15 (filled square).}
-
-\item{black_marubozu_shape}{Shape for Black Marubozu points. Default 15 (filled square).}
-
-\item{point_alpha}{Alpha transparency for the Marubozu points. Default 0.8.}
-
-\item{mark_at_body_center}{Whether to mark at the center of the candle body instead of Close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Marubozu points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the columns:
+\itemize{
+\item WhiteMarubozu: TRUE if pattern detected
+\item BlackMarubozu: TRUE if pattern detected
+}
 }
 \description{
-This function adds CSP Marubozu points (White Marubozu and Black Marubozu)
-to a candlestick chart created by eCandleSticks using the results from a CSP Marubozu analysis,
-and recombines it with the volume subplot if it exists.
+Identifies Marubozu candlestick patterns in an OHLC price series.
+Marubozu candles have long bodies with very small or no shadows.
+}
+\details{
+Number of candle lines: \bold{1}
+
+\strong{White Marubozu:}
+A long white candle that has no shadows or only small shadows on either end.
+
+\strong{Black Marubozu:}
+A long black candle that has no shadows or only small shadows on either end.
+
+In default settings, the candle \emph{body} length must be greater than the average
+true range of last \code{n} periods. The threshold can be varied by \code{ATRFactor}.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+addCSPMarubozu(YHOO)
 
-# Get CSP Marubozu results
-csp_marubozu_data <- CSPMarubozu(AAPL) # This returns a data frame with WhiteMarubozu and BlackMarubozu columns
+# Include not-so-long-marubozus
+addCSPMarubozu(YHOO, ATRFactor = 0.8)
 
-# Add Marubozu points
-result_with_marubozu <- addCSPMarubozu(result, csp_marubozu_data)
+# Filter for white closing marubozus (Cl(TS) = Hi(TS))
+addCSPMarubozu(YHOO, maxuppershadowCL = 0)[, "WhiteMarubozu"]
+}
 
-# Display the combined plot with Marubozu points
-print(result_with_marubozu$combined_plot)
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.candlesticker.com/Bearish.asp}
 }
 }
+\seealso{
+\code{\link{CandleBodyLength}}
+\code{\link[TTR]{ATR}}
+
+Other pattern-1bar:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-1bar}
+\concept{pattern-bear}
+\concept{pattern-bull}

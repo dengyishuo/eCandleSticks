@@ -2,59 +2,118 @@
 % Please edit documentation in R/addCSPNLongWhiteCandleBodies.R
 \name{addCSPNLongWhiteCandleBodies}
 \alias{addCSPNLongWhiteCandleBodies}
-\title{Add CSP N Long White Candle Bodies Points to Candlestick Chart}
+\title{N Consecutive Long White Candle Bodies}
 \usage{
 addCSPNLongWhiteCandleBodies(
-  eCandleSticks_result,
-  csp_n_long_white_result,
-  n_long_white_color = "green",
-  point_size = 3,
-  n_long_white_shape = 16,
-  point_alpha = 0.8,
-  mark_at_close = TRUE
+  x,
+  N = 2,
+  n = 20,
+  threshold = 1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_n_long_white_result}{The result object from CSP N Long White Candle Bodies analysis,
-which should be a data frame containing a 'Date' column and a logical column
-'X2LongWhiteCandleBodies' (or similar pattern for different N values)}
+\item{N}{Number of consecutive candles to test. Default is 2.}
 
-\item{n_long_white_color}{Color for N Long White Candle Bodies points. Default "green".}
+\item{n}{Number of preceding candles to calculate median candle body length. Default is 20.}
 
-\item{point_size}{Size for the N Long White Candle Bodies points. Default 3.}
+\item{threshold}{Minimum candle body length in relation to the median candle body length
+of \code{n} preceding candles. Default is 1.}
 
-\item{n_long_white_shape}{Shape for N Long White Candle Bodies points. Default 16 (filled circle).}
-
-\item{point_alpha}{Alpha transparency for the N Long White Candle Bodies points. Default 0.8.}
-
-\item{mark_at_close}{Whether to mark at the close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with N Long White Candle Bodies points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item {N}LongWhiteCandleBodies: TRUE if current candle is the \code{N}-th consecutive long white candle body
+}
 }
 \description{
-This function adds CSP N Long White Candle Bodies points to a candlestick chart
-created by eCandleSticks using the results from a CSP N Long White Candle Bodies analysis,
-and recombines it with the volume subplot if it exists.
+Identifies sequences of N consecutive long white candle bodies in an OHLC price series.
+}
+\details{
+This function identifies when the current candle is the N-th consecutive long white candle body.
+A candle body is considered "long" if its length is greater than or equal to the threshold
+times the median candle body length of the preceding n candles.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
-
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
-
-# Get CSP N Long White Candle Bodies results
-csp_n_long_white_data <- CSPNLongWhiteCandleBodies(AAPL) # This returns a data frame with X2LongWhiteCandleBodies column
-
-# Add N Long White Candle Bodies points
-result_with_n_long_white <- addCSPNLongWhiteCandleBodies(result, csp_n_long_white_data)
-
-# Display the combined plot with N Long White Candle Bodies points
-print(result_with_n_long_white$combined_plot)
+getSymbols("YHOO", adjust = TRUE)
+addCSPNLongWhiteCandleBodies(YHOO)
 }
+
 }
+\seealso{
+\code{\link{addCSPLongCandleBody}}
+
+Other pattern-nbar:
+\code{\link[=addCSPNBlended]{addCSPNBlended()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=drawCSPNBlended]{drawCSPNBlended()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-bull}
+\concept{pattern-nbar}

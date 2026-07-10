@@ -2,57 +2,147 @@
 % Please edit documentation in R/addCSPHammer.R
 \name{addCSPHammer}
 \alias{addCSPHammer}
-\title{Add CSP Hammer Points to Candlestick Chart}
+\title{Hammer Candlestick Pattern}
 \usage{
 addCSPHammer(
-  eCandleSticks_result,
-  csp_hammer_result,
-  hammer_color = "blue",
-  point_size = 3,
-  hammer_shape = 18,
-  point_alpha = 0.8,
-  mark_at_low_level = TRUE
+  x,
+  minlowershadowCL = 2/3,
+  maxuppershadowCL = 0.1,
+  minbodyCL = 0.1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open, High, Low and Close Prices}
 
-\item{csp_hammer_result}{The result object from CSP Hammer analysis, which should be a data frame
-containing a 'Date' column and a logical column 'Hammer'}
+\item{minlowershadowCL}{Minimum lower shadow to candle length ratio. Default is 2/3.}
 
-\item{hammer_color}{Color for Hammer points. Default "blue".}
+\item{maxuppershadowCL}{Maximum tolerated upper shadow to candle length ratio. Default is 0.1.}
 
-\item{point_size}{Size for the Hammer points. Default 3.}
+\item{minbodyCL}{Minimum body to candle length ratio. Default is 0.1.}
 
-\item{hammer_shape}{Shape for Hammer points. Default 18 (diamond).}
-
-\item{point_alpha}{Alpha transparency for the Hammer points. Default 0.8.}
-
-\item{mark_at_low_level}{Whether to mark at the low price (hammer's lowest point) instead of Close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Hammer points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item Hammer: TRUE if hammer pattern detected
+}
 }
 \description{
-This function adds CSP Hammer points to a candlestick chart created by eCandleSticks
-using the results from a CSP Hammer analysis, and recombines it with the volume subplot if it exists.
+Identifies Hammer patterns in an OHLC price series.
+The hammer is a one-day bullish reversal pattern that appears during a downtrend.
+}
+\details{
+Number of candle lines: \bold{1}
+
+The hammer is a one-day formation expected to be an early sign for the reversal
+of a downtrend into an uptrend. It has:
+\itemize{
+\item A long lower shadow (at least \code{minlowershadowCL} of the candle length)
+\item A small body at the top of the candle (at least \code{minbodyCL} of the candle length)
+\item No or only a very short upper shadow (at most \code{maxuppershadowCL} of the candle length)
+\item The color of the body is not important
+}
+}
+\note{
+The function filters candles that look like hammers, without considering
+the current trend direction. If only hammer patterns in a downtrend should be
+filtered, an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter for hammer patterns
+addCSPHammer(YHOO)
 
-# Get CSP Hammer results
-csp_hammer_data <- CSPHammer(AAPL) # This returns a data frame with Hammer column
-
-# Add Hammer points
-result_with_hammer <- addCSPHammer(result, csp_hammer_data)
-
-# Display the combined plot with Hammer points
-print(result_with_hammer$combined_plot)
+# Filter for hammer patterns that occur in downtrends
+addCSPHammer(YHOO) & TrendDetectionChannel(YHOO)[, "DownTrend"]
 }
+
 }
+\references{
+The following site was used to code/document this candlestick pattern:
+\url{http://www.candlesticker.com/Cs18.asp}
+}
+\seealso{
+\code{\link{addCSPDoji}}
+\code{\link{TrendDetectionChannel}}
+\code{\link{TrendDetectionSMA}}
+
+Other pattern-1bar:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-1bar}
+\concept{pattern-bull}

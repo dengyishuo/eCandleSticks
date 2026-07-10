@@ -2,63 +2,214 @@
 % Please edit documentation in R/addCSPThreeLineStrike.R
 \name{addCSPThreeLineStrike}
 \alias{addCSPThreeLineStrike}
-\title{Add CSP Three Line Strike Patterns to Candlestick Chart}
+\title{Three Line Strike Candlestick Pattern}
 \usage{
 addCSPThreeLineStrike(
-  eCandleSticks_result,
-  csp_three_line_result,
-  bull_color = "blue",
-  bear_color = "purple",
-  point_size = 4,
-  bull_shape = 24,
-  bear_shape = 25,
-  point_alpha = 0.8,
-  mark_at_close = TRUE
+  x,
+  n = 25,
+  minbodysizeMedian = 0.5,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_three_line_result}{The result object from CSPThreeLineStrike analysis, which should be an xts object
-containing logical columns 'Bull.ThreeLineStrike' and 'Bear.ThreeLineStrike'}
+\item{n}{Number of preceding candles to calculate median candle length. Default is 25.}
 
-\item{bull_color}{Color for Bullish Three Line Strike points. Default "blue".}
+\item{minbodysizeMedian}{Minimum candle length in relation to the median candle length
+of \code{n} preceding candles. Default is 0.5.}
 
-\item{bear_color}{Color for Bearish Three Line Strike points. Default "purple".}
-
-\item{point_size}{Size for the pattern points. Default 4.}
-
-\item{bull_shape}{Shape for Bullish pattern points. Default 24 (up triangle).}
-
-\item{bear_shape}{Shape for Bearish pattern points. Default 25 (down triangle).}
-
-\item{point_alpha}{Alpha transparency for the pattern points. Default 0.8.}
-
-\item{mark_at_close}{Whether to mark at the close price. If FALSE, marks at the high/low. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Three Line Strike patterns added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the columns:
+\itemize{
+\item Bull.ThreeLineStrike: TRUE if bullish Three Line Strike pattern detected
+\item Bear.ThreeLineStrike: TRUE if bearish Three Line Strike pattern detected
+}
 }
 \description{
-This function adds CSP Three Line Strike patterns (Bullish and Bearish)
-to a candlestick chart created by eCandleSticks using the results from CSPThreeLineStrike analysis.
+Identifies bullish and bearish Three Line Strike patterns in an Open/Close price series.
+This is a four-candle continuation pattern that signals potential trend continuation.
+}
+\details{
+Number of candle lines: \bold{4}
+
+\strong{Bullish Three Line Strike:}
+\itemize{
+\item The first three candles must all be white with not too small candle bodies
+\item The close of the second candle is above the close of the first
+\item The close of the third candle is above the close of the second
+\item The open of the last candle is at or above the close of the third candle
+\item The price then moves down heavily and closes at or below the open of the first candle
+\item This pattern signals a potential continuation of a downtrend
+}
+
+\strong{Bearish Three Line Strike:}
+\itemize{
+\item The opposite of the bullish pattern
+\item Three black candles followed by a long white candle
+\item This pattern signals a potential continuation of an uptrend
+}
+
+This formation is very rare.
+}
+\note{
+The function filters patterns that look like three line strikes, without considering
+the current trend direction. If only patterns in specific trends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+Sys.setenv(TZ = "UTC")
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+getSymbols("COG")
+TLS <- addCSPThreeLineStrike(COG)
 
-# Get CSP Three Line Strike results
-csp_three_line_data <- CSPThreeLineStrike(AAPL)
+# How often does that occur?
+colSums(TLS, na.rm = TRUE)
 
-# Add Three Line Strike patterns
-result_with_patterns <- addCSPThreeLineStrike(result, csp_three_line_data)
+# When did that occur?
+TLS[TLS[, 1] > 0 | TLS[, 2] > 0, ]
 
-# Display the combined plot with pattern points
-print(result_with_patterns$combined_plot)
+# Filter for bearish three line strikes that occur in downtrends
+TLS1 <- addCSPThreeLineStrike(COG)[, "Bear.ThreeLineStrike"] &
+  TrendDetectionChannel(lag(COG, k = 4))[, "DownTrend"]
+TLS1[TLS1[, 1] > 0, ]
+
+# Show in a chart
+chartSeries(COG["2014-09/2014-10"])
+}
+
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{https://hitandruncandlesticks.com/bullish-three-line-strike/}
+\item \url{https://hitandruncandlesticks.com/bearish-three-line-strike/}
+\item \url{http://thepatternsite.com/ThreeLineStrikeBull.html}
 }
 }
+\seealso{
+\code{\link{addCSPNLongWhiteCandleBodies}}
+\code{\link{addCSPNLongBlackCandleBodies}}
+
+Other pattern-3bar:
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInvertedHammer]{addCSPInvertedHammer()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-3bar}
+\concept{pattern-bear}
+\concept{pattern-bull}

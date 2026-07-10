@@ -1,158 +1,130 @@
-#' Add CSP Tasuki Gap Points to Candlestick Chart
+#' Upside/Downside Tasuki Gap Candlestick Pattern
 #'
-#' This function adds CSP Tasuki Gap points (Upside Tasuki Gap and Downside Tasuki Gap)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Tasuki Gap analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Upside and Downside Tasuki Gap patterns in an OHLC price series.
+#' These are three-candle continuation patterns that occur within existing trends.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_tasuki_gap_result The result object from CSP Tasuki Gap analysis,
-#'        which should be a data frame containing a 'Date' column and logical columns
-#'        'UpsideTasukiGap' and 'DownsideTasukiGap'
-#' @param upside_tasuki_gap_color Color for Upside Tasuki Gap points. Default "green".
-#' @param downside_tasuki_gap_color Color for Downside Tasuki Gap points. Default "red".
-#' @param point_size Size for the Tasuki Gap points. Default 3.
-#' @param upside_tasuki_gap_shape Shape for Upside Tasuki Gap points. Default 24 (up triangle).
-#' @param downside_tasuki_gap_shape Shape for Downside Tasuki Gap points. Default 25 (down triangle).
-#' @param point_alpha Alpha transparency for the Tasuki Gap points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
 #'
-#' @return A modified eCandleSticks result list with Tasuki Gap points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{3}
+#'
+#' \strong{Upside Tasuki Gap:}
+#' \itemize{
+#' \item The market is in an uptrend
+#' \item First candle: white candle
+#' \item Second candle: white candle that gaps above the high of the first candle
+#' \item Third candle: black candle that opens within the body of the second candle and closes within the gap between the first and second candle
+#' \item This pattern signals a potential continuation of the uptrend
+#' }
+#'
+#' \strong{Downside Tasuki Gap:}
+#' \itemize{
+#' \item The market is in a downtrend
+#' \item First candle: black candle
+#' \item Second candle: black candle that gaps below the low of the first candle
+#' \item Third candle: white candle that opens within the body of the second candle and closes within the gap between the first and second candle
+#' \item This pattern signals a potential continuation of the downtrend
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item UpsideTasukiGap: TRUE if Upside Tasuki Gap pattern detected
+#' \item DownsideTasukiGap: TRUE if Downside Tasuki Gap pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.investopedia.com/terms/u/upside-tasuki-gap.asp#axzz1jtuDsM6i}
+#' \item \url{http://www.investopedia.com/terms/d/downside-tasuki-gap.asp#axzz1jtuDsM6i}
+#' \item \url{http://thepatternsite.com/UpsideTasukiGap.html}
+#' \item \url{http://thepatternsite.com/DownsideTasukiGap.html}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like Tasuki gap patterns, without considering
+#' the current trend direction. If only patterns in specific trends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPGap}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("SSRI", adjust = TRUE)
+#' addCSPTasukiGap(SSRI)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Tasuki Gap results
-#' csp_tasuki_gap_data <- CSPTasukiGap(AAPL) # This returns a data frame with UpsideTasukiGap and DownsideTasukiGap columns
-#'
-#' # Add Tasuki Gap points
-#' result_with_tasuki_gap <- addCSPTasukiGap(result, csp_tasuki_gap_data)
-#'
-#' # Display the combined plot with Tasuki Gap points
-#' print(result_with_tasuki_gap$combined_plot)
+#' # Filter upside Tasuki gaps in uptrends
+#' addCSPTasukiGap(SSRI)[, "UpsideTasukiGap"] &
+#'   TrendDetectionChannel(lag(SSRI, k = 3))[, "UpTrend"]
 #' }
-addCSPTasukiGap <- function(eCandleSticks_result, csp_tasuki_gap_result,
-                            upside_tasuki_gap_color = "green", downside_tasuki_gap_color = "red",
-                            point_size = 3, upside_tasuki_gap_shape = 24, downside_tasuki_gap_shape = 25,
-                            point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_tasuki_gap_result
-  if (!is.data.frame(csp_tasuki_gap_result) && !xts::is.xts(csp_tasuki_gap_result)) {
-    stop("csp_tasuki_gap_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl Hi Lo
+#' @importFrom xts reclass xtsAttributes
+addCSPTasukiGap <- function(x,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Hi(TS) && has.Lo(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_tasuki_gap_result)) {
-    csp_tasuki_gap_result <- data.frame(
-      Date = zoo::index(csp_tasuki_gap_result),
-      as.data.frame(csp_tasuki_gap_result)
-    )
-  }
+  LAG2TS <- LagOHLC(TS, k = 2)
+  LAG1TS <- LagOHLC(TS, k = 1)
+  GAP1 <- addCSPGap(LAG1TS, ignoreShadows = FALSE)
 
-  if (!"Date" %in% colnames(csp_tasuki_gap_result)) {
-    stop("csp_tasuki_gap_result must contain a 'Date' column")
-  }
+  UTG <- xts::reclass(
+    quantmod::Op(LAG2TS) < quantmod::Cl(LAG2TS) & # 1st candle: white
+      GAP1[, 1] & # Up Gap btwn 1st and 2nd candle
+      quantmod::Op(LAG1TS) < quantmod::Cl(LAG1TS) & # 2nd candle: white
+      quantmod::Op(TS) < quantmod::Cl(LAG1TS) & quantmod::Op(TS) > quantmod::Op(LAG1TS) & # 3rd candle opens within 2nd candle's body
+      quantmod::Cl(TS) < quantmod::Lo(LAG1TS) & quantmod::Cl(TS) > quantmod::Hi(LAG2TS), # 3rd candle closes within gap of 1st and 2nd candle
+    TS
+  )
 
-  required_cols <- c("UpsideTasukiGap", "DownsideTasukiGap")
-  if (!all(required_cols %in% colnames(csp_tasuki_gap_result))) {
-    stop("csp_tasuki_gap_result must contain 'UpsideTasukiGap' and 'DownsideTasukiGap' columns")
-  }
+  DTG <- xts::reclass(
+    quantmod::Op(LAG2TS) > quantmod::Cl(LAG2TS) & # 1st candle: black
+      GAP1[, 2] & # Down Gap btwn 1st and 2nd candle
+      quantmod::Op(LAG1TS) > quantmod::Cl(LAG1TS) & # 2nd candle: black
+      quantmod::Op(TS) > quantmod::Cl(LAG1TS) & quantmod::Op(TS) < quantmod::Op(LAG1TS) & # 3rd candle opens within 2nd candle's body
+      quantmod::Cl(TS) > quantmod::Hi(LAG1TS) & quantmod::Cl(TS) < quantmod::Lo(LAG2TS), # 3rd candle closes within gap of 1st and 2nd candle
+    TS
+  )
 
-  # Convert Date to proper format if needed
-  csp_tasuki_gap_result$Date <- as.Date(csp_tasuki_gap_result$Date)
+  result <- cbind(UTG, DTG)
+  colnames(result) <- c("UpsideTasukiGap", "DownsideTasukiGap")
+  xts::xtsAttributes(result) <- list(bars = 3)
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_tasuki_gap_result, by = "Date", all.x = TRUE)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Extract different types of Tasuki Gap points
-  upside_tasuki_gap_points <- merged_data[merged_data$UpsideTasukiGap == TRUE & !is.na(merged_data$UpsideTasukiGap), ]
-  downside_tasuki_gap_points <- merged_data[merged_data$DownsideTasukiGap == TRUE & !is.na(merged_data$DownsideTasukiGap), ]
-
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    upside_tasuki_gap_points$TasukiGapLevel <- upside_tasuki_gap_points$Close
-    downside_tasuki_gap_points$TasukiGapLevel <- downside_tasuki_gap_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    upside_tasuki_gap_points$TasukiGapLevel <- (upside_tasuki_gap_points$High + upside_tasuki_gap_points$Low) / 2
-    downside_tasuki_gap_points$TasukiGapLevel <- (downside_tasuki_gap_points$High + downside_tasuki_gap_points$Low) / 2
-  }
-
-  # Add Tasuki Gap points to the price plot
-  price_plot_with_tasuki_gap <- eCandleSticks_result$price_plot
-
-  # Add Upside Tasuki Gap points (if any)
-  if (nrow(upside_tasuki_gap_points) > 0) {
-    price_plot_with_tasuki_gap <- price_plot_with_tasuki_gap +
-      ggplot2::geom_point(
-        data = upside_tasuki_gap_points,
-        aes(x = Date, y = TasukiGapLevel, color = "Upside Tasuki Gap"),
-        size = point_size,
-        shape = upside_tasuki_gap_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Downside Tasuki Gap points (if any)
-  if (nrow(downside_tasuki_gap_points) > 0) {
-    price_plot_with_tasuki_gap <- price_plot_with_tasuki_gap +
-      ggplot2::geom_point(
-        data = downside_tasuki_gap_points,
-        aes(x = Date, y = TasukiGapLevel, color = "Downside Tasuki Gap"),
-        size = point_size,
-        shape = downside_tasuki_gap_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Tasuki Gap points
-  if (nrow(upside_tasuki_gap_points) > 0 || nrow(downside_tasuki_gap_points) > 0) {
-    price_plot_with_tasuki_gap <- price_plot_with_tasuki_gap +
-      ggplot2::scale_color_manual(
-        name = "CSP Tasuki Gap Patterns",
-        values = c(
-          "Upside Tasuki Gap" = upside_tasuki_gap_color,
-          "Downside Tasuki Gap" = downside_tasuki_gap_color
-        ),
-        breaks = c("Upside Tasuki Gap", "Downside Tasuki Gap")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(upside_tasuki_gap_shape, downside_tasuki_gap_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_tasuki_gap
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_tasuki_gap, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_tasuki_gap
-  }
-
-  # Add csp_tasuki_gap_result to the output for reference
-  eCandleSticks_result$csp_tasuki_gap_data <- csp_tasuki_gap_result
-  eCandleSticks_result$upside_tasuki_gap_points <- upside_tasuki_gap_points
-  eCandleSticks_result$downside_tasuki_gap_points <- downside_tasuki_gap_points
-
-  return(eCandleSticks_result)
 }

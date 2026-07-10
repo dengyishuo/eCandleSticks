@@ -1,158 +1,135 @@
-#' Add CSP Stomach Points to Candlestick Chart
+#' Above/Below The Stomach Candlestick Pattern
 #'
-#' This function adds CSP Stomach points (Above The Stomach and Below The Stomach)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Stomach analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Above/Below The Stomach patterns in an Open/Close price series.
+#' These are two-candle reversal patterns that signal potential trend changes.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_stomach_result The result object from CSP Stomach analysis,
-#'        which should be a data frame containing a 'Date' column and logical columns
-#'        'AboveTheStomach' and 'BelowTheStomach'
-#' @param above_stomach_color Color for Above The Stomach points. Default "blue".
-#' @param below_stomach_color Color for Below The Stomach points. Default "orange".
-#' @param point_size Size for the Stomach points. Default 3.
-#' @param above_stomach_shape Shape for Above The Stomach points. Default 24 (up triangle).
-#' @param below_stomach_shape Shape for Below The Stomach points. Default 25 (down triangle).
-#' @param point_alpha Alpha transparency for the Stomach points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. Default TRUE.
+#' @param x xts Time Series containing Open and Close Prices
 #'
-#' @return A modified eCandleSticks result list with Stomach points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' \strong{Above The Stomach:}
+#' \itemize{
+#' \item Prior trend: \bold{down}
+#' \item A black candle followed by a white candle
+#' \item The opening price of the second day must be at or above the midpoint of the first candle's body
+#' \item This pattern signals a potential bullish reversal in a downtrend
+#' }
+#'
+#' \strong{Below The Stomach:}
+#' \itemize{
+#' \item Prior trend: \bold{up}
+#' \item A white candle followed by a black candle
+#' \item The opening price of the second day must be at or below the midpoint of the first candle's body
+#' \item This pattern signals a potential bearish reversal in an uptrend
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item AboveTheStomach: TRUE if Above The Stomach pattern detected
+#' \item BelowTheStomach: TRUE if Below The Stomach pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.thepatternsite.com/AboveStomach.html}
+#' \item \url{http://www.thepatternsite.com/BelowStomach.html}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like above/below the Stomach, without considering
+#' the current trend direction. If only patterns in specific trends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPStomach(YHOO)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Stomach results
-#' csp_stomach_data <- CSPStomach(AAPL) # This returns a data frame with AboveTheStomach and BelowTheStomach columns
-#'
-#' # Add Stomach points
-#' result_with_stomach <- addCSPStomach(result, csp_stomach_data)
-#'
-#' # Display the combined plot with Stomach points
-#' print(result_with_stomach$combined_plot)
+#' # Filter above the Stomach pattern in downtrends
+#' addCSPStomach(YHOO)[, "AboveTheStomach"] &
+#'   TrendDetectionChannel(lag(YHOO, k = 2))[, "DownTrend"]
 #' }
-addCSPStomach <- function(eCandleSticks_result, csp_stomach_result,
-                          above_stomach_color = "blue", below_stomach_color = "orange",
-                          point_size = 3, above_stomach_shape = 24, below_stomach_shape = 25,
-                          point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_stomach_result
-  if (!is.data.frame(csp_stomach_result) && !xts::is.xts(csp_stomach_result)) {
-    stop("csp_stomach_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes as.xts
+addCSPStomach <- function(x,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_stomach_result)) {
-    csp_stomach_result <- data.frame(
-      Date = zoo::index(csp_stomach_result),
-      as.data.frame(csp_stomach_result)
-    )
-  }
+  LAGTS <- LagOC(TS, k = 1)
 
-  if (!"Date" %in% colnames(csp_stomach_result)) {
-    stop("csp_stomach_result must contain a 'Date' column")
-  }
+  #  Above the Stomach pattern:
 
-  required_cols <- c("AboveTheStomach", "BelowTheStomach")
-  if (!all(required_cols %in% colnames(csp_stomach_result))) {
-    stop("csp_stomach_result must contain 'AboveTheStomach' and 'BelowTheStomach' columns")
-  }
+  #    Previous candle is bearish (red)
 
-  # Convert Date to proper format if needed
-  csp_stomach_result$Date <- as.Date(csp_stomach_result$Date)
+  #  Current candle is bullish (green)
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_stomach_result, by = "Date", all.x = TRUE)
+  #  Current candle's open is above the midpoint of previous candle
 
-  # Extract different types of Stomach points
-  above_stomach_points <- merged_data[merged_data$AboveTheStomach == TRUE & !is.na(merged_data$AboveTheStomach), ]
-  below_stomach_points <- merged_data[merged_data$BelowTheStomach == TRUE & !is.na(merged_data$BelowTheStomach), ]
+  AboveTheStomach <- xts::reclass(
+    quantmod::Op(LAGTS) > quantmod::Cl(LAGTS) & # Previous candle is bearish
+      quantmod::Cl(TS) > quantmod::Op(TS) & # Current candle is bullish
+      quantmod::Op(TS) >= ((quantmod::Op(LAGTS) + quantmod::Cl(LAGTS)) / 2), # Current open above previous midpoint
+    TS
+  )
 
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    above_stomach_points$StomachLevel <- above_stomach_points$Close
-    below_stomach_points$StomachLevel <- below_stomach_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    above_stomach_points$StomachLevel <- (above_stomach_points$High + above_stomach_points$Low) / 2
-    below_stomach_points$StomachLevel <- (below_stomach_points$High + below_stomach_points$Low) / 2
-  }
+  # Below the Stomach pattern:
 
-  # Add Stomach points to the price plot
-  price_plot_with_stomach <- eCandleSticks_result$price_plot
+  # Previous candle is bullish (green)
 
-  # Add Above The Stomach points (if any)
-  if (nrow(above_stomach_points) > 0) {
-    price_plot_with_stomach <- price_plot_with_stomach +
-      ggplot2::geom_point(
-        data = above_stomach_points,
-        aes(x = Date, y = StomachLevel, color = "Above The Stomach"),
-        size = point_size,
-        shape = above_stomach_shape,
-        alpha = point_alpha
-      )
-  }
+  # Current candle is bearish (red)
 
-  # Add Below The Stomach points (if any)
-  if (nrow(below_stomach_points) > 0) {
-    price_plot_with_stomach <- price_plot_with_stomach +
-      ggplot2::geom_point(
-        data = below_stomach_points,
-        aes(x = Date, y = StomachLevel, color = "Below The Stomach"),
-        size = point_size,
-        shape = below_stomach_shape,
-        alpha = point_alpha
-      )
-  }
+  # Current candle's open is below the midpoint of previous candle
 
-  # Add color scale and legend only if there are any Stomach points
-  if (nrow(above_stomach_points) > 0 || nrow(below_stomach_points) > 0) {
-    price_plot_with_stomach <- price_plot_with_stomach +
-      ggplot2::scale_color_manual(
-        name = "CSP Stomach Patterns",
-        values = c(
-          "Above The Stomach" = above_stomach_color,
-          "Below The Stomach" = below_stomach_color
-        ),
-        breaks = c("Above The Stomach", "Below The Stomach")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(above_stomach_shape, below_stomach_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
+  BelowTheStomach <- xts::reclass(
+    quantmod::Cl(LAGTS) > quantmod::Op(LAGTS) & # Previous candle is bullish
+      quantmod::Op(TS) > quantmod::Cl(TS) & # Current candle is bearish
+      quantmod::Op(TS) <= ((quantmod::Op(LAGTS) + quantmod::Cl(LAGTS)) / 2), # Current open below previous midpoint
+    TS
+  )
 
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_stomach
+  # Combine results
 
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_stomach, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_stomach
-  }
+  result <- xts::as.xts(cbind(AboveTheStomach, BelowTheStomach))
+  colnames(result) <- c("AboveTheStomach", "BelowTheStomach")
+  xts::xtsAttributes(result) <- list(bars = 2)
 
-  # Add csp_stomach_result to the output for reference
-  eCandleSticks_result$csp_stomach_data <- csp_stomach_result
-  eCandleSticks_result$above_stomach_points <- above_stomach_points
-  eCandleSticks_result$below_stomach_points <- below_stomach_points
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  return(eCandleSticks_result)
 }

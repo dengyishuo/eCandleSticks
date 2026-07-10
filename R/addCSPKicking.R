@@ -1,157 +1,155 @@
-#' Add CSP Kicking Points to Candlestick Chart
+#' Kicking Candlestick Pattern
 #'
-#' This function adds CSP Kicking points (Bullish Kicking and Bearish Kicking)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Kicking analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies bullish and bearish Kicking candlestick patterns in an OHLC price series.
+#' This is a two-candle pattern that signals strong reversal potential.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_kicking_result The result object from CSP Kicking analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'Bull.Kicking' and 'Bear.Kicking'
-#' @param bullish_kicking_color Color for Bullish Kicking points. Default "green".
-#' @param bearish_kicking_color Color for Bearish Kicking points. Default "red".
-#' @param point_size Size for the Kicking points. Default 3.
-#' @param bullish_kicking_shape Shape for Bullish Kicking points. Default 10 (plus sign).
-#' @param bearish_kicking_shape Shape for Bearish Kicking points. Default 12 (square with cross).
-#' @param point_alpha Alpha transparency for the Kicking points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
+#' @param ignoreShadows If TRUE, only Open and Close Price are evaluated.
+#' High and Low are ignored. Default is TRUE.
+#' @param n Number of preceding candles to calculate median candle length or average True Range. Default is 20.
+#' @param threshold Minimum candle length in relation to the median candle length of \code{n} preceding candles. Default is 1.
+#' @param ATRFactor Minimum size of candle body compared to the ATR. Default is 1.
+#' @param maxshadowCL Maximum tolerated upper and lower shadow to candle length ratio. Default is 0.1.
+#' @details
+#' Number of candle lines: \bold{2}
 #'
-#' @return A modified eCandleSticks result list with Kicking points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' \strong{Bullish Kicking Pattern:}
+#' \itemize{
+#' \item A White Marubozu following a Black Marubozu
+#' \item After the Black Marubozu, market gaps higher on the opening
+#' \item The pattern is filtered with \code{ignoreShadows=FALSE} and occurs very scarcely
+#' \item When \code{ignoreShadows=TRUE}, a less strict filter is applied: a long black candle body
+#' followed by a long white candle body with a gap
+#' }
+#'
+#' \strong{Bearish Kicking Pattern:}
+#' \itemize{
+#' \item Opposite of Bullish Kicking Pattern
+#' \item A Black Marubozu following a White Marubozu with a gap down
+#' }
+#'
+#' Unlike most other candlestick patterns, the previous market direction is not important for this pattern.
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item Bull.Kicking: TRUE if Bullish Kicking pattern detected
+#' \item Bear.Kicking: TRUE if Bearish Kicking pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @seealso
+#' \code{\link{addCSPLongCandleBody}}
+#' \code{\link{addCSPMarubozu}}
+#' \code{\link{addCSPGap}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' # Look for Kicking Pattern right out of the textbook
+#' # They occur only once in a blue moon
+#' addCSPKicking(YHOO, ignoreShadows = FALSE, maxshadowCL = 0)
 #'
-#' # Get CSP Kicking results
-#' csp_kicking_data <- CSPKicking(AAPL) # This returns a data frame with Bull.Kicking and Bear.Kicking columns
-#'
-#' # Add Kicking points
-#' result_with_kicking <- addCSPKicking(result, csp_kicking_data)
-#'
-#' # Display the combined plot with Kicking points
-#' print(result_with_kicking$combined_plot)
+#' # Use less strict filter rules
+#' addCSPKicking(YHOO)
 #' }
-addCSPKicking <- function(eCandleSticks_result, csp_kicking_result,
-                          bullish_kicking_color = "green", bearish_kicking_color = "red",
-                          point_size = 3, bullish_kicking_shape = 10, bearish_kicking_shape = 12,
-                          point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_kicking_result
-  if (!is.data.frame(csp_kicking_result) && !xts::is.xts(csp_kicking_result)) {
-    stop("csp_kicking_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl Hi Lo
+#' @importFrom xts reclass xtsAttributes
+#' @importFrom TTR ATR
+addCSPKicking <- function(x, ignoreShadows = TRUE, n = 20, threshold = 1, ATRFactor = 1, maxshadowCL = 0.1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Hi(TS) && has.Lo(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_kicking_result)) {
-    csp_kicking_result <- data.frame(
-      Date = zoo::index(csp_kicking_result),
-      as.data.frame(csp_kicking_result)
+  TSGAP <- addCSPGap(TS, ignoreShadows = ignoreShadows)
+
+  if (ignoreShadows == FALSE) {
+    MB <- addCSPMarubozu(TS,
+      n = n, ATRFactor = ATRFactor,
+      maxuppershadowCL = maxshadowCL,
+      maxlowershadowCL = maxshadowCL
     )
-  }
 
-  if (!"Date" %in% colnames(csp_kicking_result)) {
-    stop("csp_kicking_result must contain a 'Date' column")
-  }
+    # 修正列索引：原代码错误地使用了第4列，应该是第2列
+    WMB1 <- quantmod::Lag(MB[, 1], k = 1) # 白色Marubozu
+    BMB1 <- quantmod::Lag(MB[, 2], k = 1) # 黑色Marubozu
 
-  required_cols <- c("Bull.Kicking", "Bear.Kicking")
-  if (!all(required_cols %in% colnames(csp_kicking_result))) {
-    stop("csp_kicking_result must contain 'Bull.Kicking' and 'Bear.Kicking' columns")
-  }
+    BULLK <- xts::reclass(
+      TSGAP[, 1] & # Gap Up
+        BMB1 & MB[, 1], # 前黑Marubozu，后白Marubozu
+      TS
+    )
 
-  # Convert Date to proper format if needed
-  csp_kicking_result$Date <- as.Date(csp_kicking_result$Date)
+    BEARK <- xts::reclass(
+      TSGAP[, 2] & # Gap Down
+        WMB1 & MB[, 2], # 前白Marubozu，后黑Marubozu
+      TS
+    )
+  } else if (ignoreShadows == TRUE) {
+    LCB <- addCSPLongCandleBody(TS, n = n, threshold = threshold)
+    LWCB1 <- quantmod::Lag(LCB[, 1], k = 1) # 长白实体
+    LBCB1 <- quantmod::Lag(LCB[, 2], k = 1) # 长黑实体
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_kicking_result, by = "Date", all.x = TRUE)
 
-  # Extract different types of Kicking points
-  bullish_kicking_points <- merged_data[merged_data$Bull.Kicking == TRUE & !is.na(merged_data$Bull.Kicking), ]
-  bearish_kicking_points <- merged_data[merged_data$Bear.Kicking == TRUE & !is.na(merged_data$Bear.Kicking), ]
+    BULLK <- xts::reclass(
+      TSGAP[, 1] & # Gap Up
+        LBCB1 & LCB[, 1], # 前长黑实体，后长白实体
+      TS
+    )
 
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    bullish_kicking_points$KickingLevel <- bullish_kicking_points$Close
-    bearish_kicking_points$KickingLevel <- bearish_kicking_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    bullish_kicking_points$KickingLevel <- (bullish_kicking_points$High + bullish_kicking_points$Low) / 2
-    bearish_kicking_points$KickingLevel <- (bearish_kicking_points$High + bearish_kicking_points$Low) / 2
-  }
-
-  # Add Kicking points to the price plot
-  price_plot_with_kicking <- eCandleSticks_result$price_plot
-
-  # Add Bullish Kicking points (if any)
-  if (nrow(bullish_kicking_points) > 0) {
-    price_plot_with_kicking <- price_plot_with_kicking +
-      ggplot2::geom_point(
-        data = bullish_kicking_points,
-        aes(x = Date, y = KickingLevel, color = "Bullish Kicking"),
-        size = point_size,
-        shape = bullish_kicking_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Bearish Kicking points (if any)
-  if (nrow(bearish_kicking_points) > 0) {
-    price_plot_with_kicking <- price_plot_with_kicking +
-      ggplot2::geom_point(
-        data = bearish_kicking_points,
-        aes(x = Date, y = KickingLevel, color = "Bearish Kicking"),
-        size = point_size,
-        shape = bearish_kicking_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Kicking points
-  if (nrow(bullish_kicking_points) > 0 || nrow(bearish_kicking_points) > 0) {
-    price_plot_with_kicking <- price_plot_with_kicking +
-      ggplot2::scale_color_manual(
-        name = "CSP Kicking Patterns",
-        values = c(
-          "Bullish Kicking" = bullish_kicking_color,
-          "Bearish Kicking" = bearish_kicking_color
-        ),
-        breaks = c("Bullish Kicking", "Bearish Kicking")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(bullish_kicking_shape, bearish_kicking_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_kicking
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_kicking, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
+    BEARK <- xts::reclass(
+      TSGAP[, 2] & # Gap Down
+        LWCB1 & LCB[, 2], # 前长白实体，后长黑实体
+      TS
     )
   } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_kicking
+    stop("ignoreShadows must be either TRUE or FALSE")
   }
 
-  # Add csp_kicking_result to the output for reference
-  eCandleSticks_result$csp_kicking_data <- csp_kicking_result
-  eCandleSticks_result$bullish_kicking_points <- bullish_kicking_points
-  eCandleSticks_result$bearish_kicking_points <- bearish_kicking_points
+  result <- cbind(BULLK, BEARK)
+  colnames(result) <- c("Bull.Kicking", "Bear.Kicking")
+  xts::xtsAttributes(result) <- list(bars = 2)
 
-  return(eCandleSticks_result)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
+
 }

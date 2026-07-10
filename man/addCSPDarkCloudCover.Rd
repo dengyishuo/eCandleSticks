@@ -2,55 +2,148 @@
 % Please edit documentation in R/addCSPDarkCloudCover.R
 \name{addCSPDarkCloudCover}
 \alias{addCSPDarkCloudCover}
-\title{Add CSP Dark Cloud Cover Points to Candlestick Chart}
+\title{Dark Cloud Cover Candlestick Pattern}
 \usage{
 addCSPDarkCloudCover(
-  eCandleSticks_result,
-  csp_dark_cloud_result,
-  point_color = "purple",
-  point_size = 3,
-  point_shape = 17,
-  point_alpha = 0.8
+  x,
+  n = 20,
+  minbodysizeMedian = 1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_dark_cloud_result}{The result object from CSP Dark Cloud Cover analysis, which should be a data frame
-containing a 'Date' column and a logical column 'DarkCloudCover'}
+\item{n}{Number of preceding candles to calculate median candle body length. Default is 20.}
 
-\item{point_color}{Color for the Dark Cloud Cover points. Default "purple".}
+\item{minbodysizeMedian}{Minimum body length relative to the median of the past \code{n} body sizes. Default is 1.}
 
-\item{point_size}{Size for the Dark Cloud Cover points. Default 3.}
-
-\item{point_shape}{Shape for the Dark Cloud Cover points. Default 17 (triangle).}
-
-\item{point_alpha}{Alpha transparency for the Dark Cloud Cover points. Default 0.8.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Dark Cloud Cover points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item DarkCloudCover: TRUE if Dark Cloud Cover pattern detected
+}
 }
 \description{
-This function adds CSP Dark Cloud Cover points to a candlestick chart created by eCandleSticks
-using the results from a CSP Dark Cloud Cover analysis, and recombines it with the volume subplot if it exists.
+Identifies Dark Cloud Cover patterns in an Open/Close price series.
+This is a two-candle bearish reversal pattern that occurs during an uptrend.
+}
+\details{
+Number of candle lines: \bold{2}
+
+A Dark Cloud Cover pattern consists of:
+\enumerate{
+\item A long white candlestick (body length > median of past n candles)
+\item A gap higher opening on the next day
+\item A black candlestick that closes more than halfway into the prior white candlestick's body
+\item The close of the second candle is still above the open of the first candle
+}
+
+This pattern is considered a bearish reversal signal when it appears during an uptrend.
+}
+\note{
+The function filters patterns that look like dark cloud covers, without considering
+the current trend direction. If only patterns in uptrends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
+addCSPDarkCloudCover(YHOO)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter dark cloud covers that occur in uptrends.
+# The lag of 2 periods of the time series for trend detection
+# ensures that the uptrend is active before the
+# dark cloud cover occurs.
+addCSPDarkCloudCover(YHOO) &
+  TrendDetectionChannel(lag(YHOO, k = 2))[, "UpTrend"]
+}
 
-# Get CSP Dark Cloud Cover results
-# This returns a data frame with DarkCloudCover column
-csp_dark_cloud_data <- CSPDarkCloudCover(AAPL)
-
-# Add Dark Cloud Cover points
-result_with_dark_cloud <- addCSPDarkCloudCover(result, csp_dark_cloud_data)
-
-# Display the combined plot with Dark Cloud Cover points
-print(result_with_dark_cloud$combined_plot)
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{http://www.candlesticker.com/Bearish.asp}
+\item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/DarkCloudCover.html}
 }
 }
+\seealso{
+The counterpart of this pattern is \code{\link{addCSPPiercingPattern}}
+
+Other pattern-2bar:
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPInsideDay]{addCSPInsideDay()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPOutsideDay]{addCSPOutsideDay()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInsideDay]{drawCSPInsideDay()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPOutsideDay]{drawCSPOutsideDay()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeBlackCrows]{addCSPThreeBlackCrows()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-2bar}
+\concept{pattern-bear}

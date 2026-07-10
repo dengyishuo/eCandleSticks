@@ -21,7 +21,7 @@
 #' }
 #'
 #' @author Andreas Voellenklee
-#' @seealso \code{\link{CSPNBlended}}
+#' @seealso \code{\link{addCSPNBlended}}
 #'
 #' @examples
 #' \dontrun{
@@ -49,7 +49,7 @@ addPriceInfo <- function(TS, CSP) {
 
   #  Calculate blended candlestick for the pattern formation
 
-  BLEND <- CSPNBlended(TS, N = attr$bars)
+  BLEND <- addCSPNBlended(TS, N = attr$bars)
 
   #  Apply the multiplier to get formation OHLC prices
 

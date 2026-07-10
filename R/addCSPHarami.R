@@ -1,157 +1,122 @@
-#' Add CSP Harami Points to Candlestick Chart
+#' Harami Candlestick Pattern
 #'
-#' This function adds CSP Harami points (Bullish Harami and Bearish Harami)
-#' to a candlestick chart created by eCandleSticks using the results from a CSP Harami analysis,
-#' and recombines it with the volume subplot if it exists.
+#' Identifies Bullish and Bearish Harami Patterns in an OHLC price series.
+#' Harami is a two-candle reversal pattern that signals potential trend changes.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_harami_result The result object from CSP Harami analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'Bull.Harami' and 'Bear.Harami'
-#' @param bullish_harami_color Color for Bullish Harami points. Default "green".
-#' @param bearish_harami_color Color for Bearish Harami points. Default "red".
-#' @param point_size Size for the Harami points. Default 3.
-#' @param bullish_harami_shape Shape for Bullish Harami points. Default 21 (filled circle).
-#' @param bearish_harami_shape Shape for Bearish Harami points. Default 22 (filled square).
-#' @param point_alpha Alpha transparency for the Harami points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price instead of the midpoint. Default TRUE.
+#' @param x xts Time Series containing Open and Close Prices
+#' @param n Number of preceding candles to calculate median candle body length. Default is 20.
+#' @param minbodysizeMedian Minimum body length of the first candle (mother candle)
+#' relative to the median of the past \code{n} body sizes. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with Harami points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' \strong{Bullish Harami Pattern:}
+#' \itemize{
+#' \item A large black candlestick (mother candle) is followed by a smaller white candlestick
+#' \item The body of the second candle is completely within the vertical range of the first candle's body
+#' \item The pattern appears during a downtrend and signals a potential reversal upward
+#' }
+#'
+#' \strong{Bearish Harami Pattern:}
+#' \itemize{
+#' \item A large white candlestick (mother candle) is followed by a smaller black candlestick
+#' \item The body of the second candle is completely within the vertical range of the first candle's body
+#' \item The pattern appears during an uptrend and signals a potential reversal downward
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item Bull.Harami: TRUE if bullish harami pattern detected
+#' \item Bear.Harami: TRUE if bearish harami pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this candlestick pattern:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like haramis, without considering
+#' the current trend direction. If only patterns in specific trends should be
+#' filtered, an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPLongCandleBody}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPHarami(YHOO)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Harami results
-#' csp_harami_data <- CSPHarami(AAPL) # This returns a data frame with Bull.Harami and Bear.Harami columns
-#'
-#' # Add Harami points
-#' result_with_harami <- addCSPHarami(result, csp_harami_data)
-#'
-#' # Display the combined plot with Harami points
-#' print(result_with_harami$combined_plot)
+#' # Filter for bullish harami that occur in downtrends
+#' BullHarami <- addCSPHarami(YHOO)[, "Bull.Harami"] &
+#'   TrendDetectionChannel(lag(YHOO, k = 2))[, "DownTrend"]
 #' }
-addCSPHarami <- function(eCandleSticks_result, csp_harami_result,
-                         bullish_harami_color = "green", bearish_harami_color = "red",
-                         point_size = 3, bullish_harami_shape = 21, bearish_harami_shape = 22,
-                         point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_harami_result
-  if (!is.data.frame(csp_harami_result) && !xts::is.xts(csp_harami_result)) {
-    stop("csp_harami_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPHarami <- function(x, n = 20, minbodysizeMedian = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_harami_result)) {
-    csp_harami_result <- data.frame(
-      Date = zoo::index(csp_harami_result),
-      as.data.frame(csp_harami_result)
-    )
-  }
+  LAGTS <- LagOC(TS, k = 1)
+  LongCandleBody <- addCSPLongCandleBody(LAGTS, n = n, threshold = minbodysizeMedian)
 
-  if (!"Date" %in% colnames(csp_harami_result)) {
-    stop("csp_harami_result must contain a 'Date' column")
-  }
+  BullHarami <- xts::reclass(
+    LongCandleBody[, 2] & # body of mother candle is black and longer than average
+      quantmod::Cl(TS) > quantmod::Op(TS) & # second candle is white
+      quantmod::Op(LAGTS) > quantmod::Cl(TS) & quantmod::Cl(LAGTS) < quantmod::Op(TS), # second body is within first body
+    TS
+  )
 
-  required_cols <- c("Bull.Harami", "Bear.Harami")
-  if (!all(required_cols %in% colnames(csp_harami_result))) {
-    stop("csp_harami_result must contain 'Bull.Harami' and 'Bear.Harami' columns")
-  }
+  BearHarami <- xts::reclass(
+    LongCandleBody[, 1] & # body of mother candle is white and longer than average
+      quantmod::Cl(TS) < quantmod::Op(TS) & # second candle is black
+      quantmod::Op(LAGTS) < quantmod::Cl(TS) & quantmod::Cl(LAGTS) > quantmod::Op(TS), # second body is within first body
+    TS
+  )
 
-  # Convert Date to proper format if needed
-  csp_harami_result$Date <- as.Date(csp_harami_result$Date)
+  result <- cbind(BullHarami, BearHarami)
+  colnames(result) <- c("Bull.Harami", "Bear.Harami")
+  xts::xtsAttributes(result) <- list(bars = 2)
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_harami_result, by = "Date", all.x = TRUE)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Extract different types of Harami points
-  bullish_harami_points <- merged_data[merged_data$Bull.Harami == TRUE & !is.na(merged_data$Bull.Harami), ]
-  bearish_harami_points <- merged_data[merged_data$Bear.Harami == TRUE & !is.na(merged_data$Bear.Harami), ]
-
-  # Determine y-value for marking
-  if (mark_at_close) {
-    # Mark at Close price
-    bullish_harami_points$HaramiLevel <- bullish_harami_points$Close
-    bearish_harami_points$HaramiLevel <- bearish_harami_points$Close
-  } else {
-    # Mark at the midpoint of the candle
-    bullish_harami_points$HaramiLevel <- (bullish_harami_points$High + bullish_harami_points$Low) / 2
-    bearish_harami_points$HaramiLevel <- (bearish_harami_points$High + bearish_harami_points$Low) / 2
-  }
-
-  # Add Harami points to the price plot
-  price_plot_with_harami <- eCandleSticks_result$price_plot
-
-  # Add Bullish Harami points (if any)
-  if (nrow(bullish_harami_points) > 0) {
-    price_plot_with_harami <- price_plot_with_harami +
-      ggplot2::geom_point(
-        data = bullish_harami_points,
-        aes(x = Date, y = HaramiLevel, color = "Bullish Harami"),
-        size = point_size,
-        shape = bullish_harami_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Bearish Harami points (if any)
-  if (nrow(bearish_harami_points) > 0) {
-    price_plot_with_harami <- price_plot_with_harami +
-      ggplot2::geom_point(
-        data = bearish_harami_points,
-        aes(x = Date, y = HaramiLevel, color = "Bearish Harami"),
-        size = point_size,
-        shape = bearish_harami_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Harami points
-  if (nrow(bullish_harami_points) > 0 || nrow(bearish_harami_points) > 0) {
-    price_plot_with_harami <- price_plot_with_harami +
-      ggplot2::scale_color_manual(
-        name = "CSP Harami Patterns",
-        values = c(
-          "Bullish Harami" = bullish_harami_color,
-          "Bearish Harami" = bearish_harami_color
-        ),
-        breaks = c("Bullish Harami", "Bearish Harami")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(bullish_harami_shape, bearish_harami_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_harami
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_harami, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_harami
-  }
-
-  # Add csp_harami_result to the output for reference
-  eCandleSticks_result$csp_harami_data <- csp_harami_result
-  eCandleSticks_result$bullish_harami_points <- bullish_harami_points
-  eCandleSticks_result$bearish_harami_points <- bearish_harami_points
-
-  return(eCandleSticks_result)
 }

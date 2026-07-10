@@ -29,8 +29,11 @@
 #'   - combined_plot: The combined plot (if show_volume=TRUE, a cowplot combined object)
 #' @export
 #' @importFrom quantmod Op Hi Lo Cl Vo Ad is.OHLC
+#' @importFrom grid unit
 #' @importFrom ggplot2 ggplot aes geom_segment geom_rect geom_line
+#' @importFrom grid unit
 #' @importFrom ggplot2 scale_fill_manual scale_color_manual labs theme_bw
+#' @importFrom grid unit
 #' @importFrom ggplot2 theme element_text element_rect guide_legend guides element_blank
 #' @importFrom dplyr mutate filter
 #' @importFrom lubridate as_date

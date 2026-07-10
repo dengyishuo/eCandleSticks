@@ -2,57 +2,149 @@
 % Please edit documentation in R/addCSPInvertedHammer.R
 \name{addCSPInvertedHammer}
 \alias{addCSPInvertedHammer}
-\title{Add CSP Inverted Hammer Points to Candlestick Chart}
+\title{Inverted Hammer Candlestick Pattern}
 \usage{
 addCSPInvertedHammer(
-  eCandleSticks_result,
-  csp_inverted_hammer_result,
-  inverted_hammer_color = "orange",
-  point_size = 3,
-  inverted_hammer_shape = 11,
-  point_alpha = 0.8,
-  mark_at_high_level = TRUE
+  x,
+  minuppershadowCL = 2/3,
+  maxlowershadowCL = 0.1,
+  minbodyCL = 0.1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open, High, Low and Close Prices}
 
-\item{csp_inverted_hammer_result}{The result object from CSP Inverted Hammer analysis, which should be a data frame
-containing a 'Date' column and a logical column 'InvertedHammer'}
+\item{minuppershadowCL}{Minimum upper shadow to candle length ratio. Default is 2/3.}
 
-\item{inverted_hammer_color}{Color for Inverted Hammer points. Default "orange".}
+\item{maxlowershadowCL}{Maximum tolerated lower shadow to candle length ratio. Default is 0.1.}
 
-\item{point_size}{Size for the Inverted Hammer points. Default 3.}
+\item{minbodyCL}{Minimum body to candle length ratio. Default is 0.1.}
 
-\item{inverted_hammer_shape}{Shape for Inverted Hammer points. Default 11 (filled star).}
-
-\item{point_alpha}{Alpha transparency for the Inverted Hammer points. Default 0.8.}
-
-\item{mark_at_high_level}{Whether to mark at the high price (inverted hammer's highest point) instead of Close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Inverted Hammer points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item InvertedHammer: TRUE if inverted hammer pattern detected
+}
 }
 \description{
-This function adds CSP Inverted Hammer points to a candlestick chart created by eCandleSticks
-using the results from a CSP Inverted Hammer analysis, and recombines it with the volume subplot if it exists.
+Identifies Inverted Hammer patterns in an OHLC price series.
+The inverted hammer is a one-day bullish reversal pattern that appears during a downtrend.
+}
+\details{
+Number of candle lines: \bold{1}
+
+The inverted hammer pattern has:
+\itemize{
+\item A long upper shadow (at least \code{minuppershadowCL} of the candle length)
+\item A small body at the bottom of the candle (at least \code{minbodyCL} of the candle length)
+\item No or only a very short lower shadow (at most \code{maxlowershadowCL} of the candle length)
+\item The color of the body is not important, though a white body is slightly more bullish
+}
+
+This pattern typically appears at the bottom of a downtrend and signals a potential reversal upward.
+}
+\note{
+The function filters candles that look like inverted hammers, without considering
+the current trend direction. If only inverted hammer patterns in a downtrend should be
+filtered, an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter for inverted hammer patterns
+addCSPInvertedHammer(YHOO)
 
-# Get CSP Inverted Hammer results
-csp_inverted_hammer_data <- CSPInvertedHammer(AAPL) # This returns a data frame with InvertedHammer column
-
-# Add Inverted Hammer points
-result_with_inverted_hammer <- addCSPInvertedHammer(result, csp_inverted_hammer_data)
-
-# Display the combined plot with Inverted Hammer points
-print(result_with_inverted_hammer$combined_plot)
+# Filter for inverted hammer patterns that occur in downtrends
+addCSPInvertedHammer(YHOO) & TrendDetectionChannel(YHOO)[, "DownTrend"]
 }
+
 }
+\references{
+The following site was used to code/document this candlestick pattern:
+\url{http://stockcharts.com/school/doku.php?id=chart_school:chart_analysis:introduction_to_candlesticks}
+}
+\seealso{
+\code{\link{addCSPDoji}}
+\code{\link{addCSPHammer}}
+\code{\link{TrendDetectionChannel}}
+\code{\link{TrendDetectionSMA}}
+
+Other pattern-1bar:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}}
+
+Other pattern-bull:
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHammer]{addCSPHammer()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNHigherClose]{addCSPNHigherClose()}},
+\code{\link[=addCSPNLongWhiteCandleBodies]{addCSPNLongWhiteCandleBodies()}},
+\code{\link[=addCSPNLongWhiteCandles]{addCSPNLongWhiteCandles()}},
+\code{\link[=addCSPPiercingPattern]{addCSPPiercingPattern()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHammer]{drawCSPHammer()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPInvertedHammer]{drawCSPInvertedHammer()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNHigherClose]{drawCSPNHigherClose()}},
+\code{\link[=drawCSPNLongWhiteCandleBodies]{drawCSPNLongWhiteCandleBodies()}},
+\code{\link[=drawCSPNLongWhiteCandles]{drawCSPNLongWhiteCandles()}},
+\code{\link[=drawCSPPiercingPattern]{drawCSPPiercingPattern()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-1bar}
+\concept{pattern-bull}

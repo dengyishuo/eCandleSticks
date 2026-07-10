@@ -1,141 +1,138 @@
-#' Add CSP Star Points to Candlestick Chart
+#' Morning/Evening Star Candlestick Pattern
 #'
-#' This function adds CSP Star points (MorningStar and EveningStar patterns) to a candlestick chart
-#' created by eCandleSticks, and recombines it with the volume subplot if it exists.
+#' Identifies Morning and Evening Star patterns in an OHLC price series.
+#' These are three-candle reversal patterns that signal potential trend changes.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_star_result The result object from CSP Star analysis, which should be a data frame
-#'        containing a 'Date' column and logical columns 'MorningStar' and 'EveningStar'
-#' @param morning_star_color Color for the Morning Star points. Default "green".
-#' @param evening_star_color Color for the Evening Star points. Default "red".
-#' @param point_size Size for the CSP Star points. Default 3.
-#' @param point_shape Shape for the CSP Star points. Default 8 (asterisk).
-#' @param point_alpha Alpha transparency for the CSP Star points. Default 0.8.
+#' @param x xts Time Series containing OHLC prices
+#' @param n Number of preceding candles to calculate median candle length. Default is 20.
+#' @param minbodysizeMedian Minimum candle length in relation to the median candle length
+#' of the formation's \emph{first} candle. Default is 1.
+#' @param maxbodysizeMedian Maximum candle length in relation to the median candle length
+#' of the formation's \emph{second} candle. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with CSP Star points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{3}
+#'
+#' \strong{Morning Star:}
+#' \itemize{
+#' \item The market is in a downtrend
+#' \item First candle: long black body
+#' \item Second candle: small real body of either color with a gap down
+#' \item Third candle: white candle that closes above the middle of the first candle's body
+#' \item This pattern signals a potential bullish reversal
+#' }
+#'
+#' \strong{Evening Star:}
+#' \itemize{
+#' \item The market is in an uptrend
+#' \item First candle: long white body
+#' \item Second candle: small real body of either color with a gap up
+#' \item Third candle: black candle that closes below the middle of the first candle's body
+#' \item This pattern signals a potential bearish reversal
+#' }
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item MorningStar: TRUE if Morning Star pattern detected
+#' \item EveningStar: TRUE if Evening Star pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bullish.asp}
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like morning/evening stars, without considering
+#' the current trend direction. If only patterns in specific trends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPLongCandleBody}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("AAPL", adjust = TRUE)
+#' addCSPStar(AAPL)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' # Allow only a small second candle body
+#' addCSPStar(YHOO, maxbodysizeMedian = 0.5)
 #'
-#' # Get CSP Star results (this would be the actual output from CSPStar function)
-#' csp_star_data <- CSPStar(AAPL) # This returns a data frame with MorningStar and EveningStar columns
-#'
-#' # Add CSP Star points
-#' result_with_stars <- addCSPStar(result, csp_star_data)
-#'
-#' # Display the combined plot with stars
-#' print(result_with_stars$combined_plot)
+#' # Filter for morning stars that occur in downtrends
+#' MorningStar <- addCSPStar(YHOO)[, "MorningStar"] &
+#'   TrendDetectionChannel(lag(YHOO, k = 3))[, "DownTrend"]
 #' }
-addCSPStar <- function(eCandleSticks_result, csp_star_result,
-                       morning_star_color = "green", evening_star_color = "red",
-                       point_size = 3, point_shape = 8, point_alpha = 0.8) {
-  # Validate csp_star_result
-  if (!is.data.frame(csp_star_result) && !xts::is.xts(csp_star_result)) {
-    stop("csp_star_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-3bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPStar <- function(x, n = 20, minbodysizeMedian = 1, maxbodysizeMedian = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_star_result)) {
-    csp_star_result <- data.frame(
-      Date = zoo::index(csp_star_result),
-      as.data.frame(csp_star_result)
-    )
-  }
+  LAG2TS <- LagOC(TS, k = 2)
+  LAG1TS <- LagOC(TS, k = 1)
+  LCB2 <- addCSPLongCandleBody(LAG2TS, n = n, threshold = minbodysizeMedian) # first candle body is longer than average
+  GAP1 <- addCSPGap(LAG1TS, ignoreShadows = TRUE) # gap between the first and second candle
+  SCB1 <- addCSPShortCandleBody(LAG1TS, n = n, threshold = maxbodysizeMedian) # second candle body is shorter than average
 
-  if (!"Date" %in% colnames(csp_star_result)) {
-    stop("csp_star_result must contain a 'Date' column")
-  }
+  MorningStar <- xts::reclass(
+    LCB2[, 2] & # 1st candle: long black candle body
+      GAP1[, 2] & # gap down from 1st to 2nd candle
+      (SCB1[, 1] | SCB1[, 2]) & # 2nd candle: short black or white candle body
+      quantmod::Cl(TS) > quantmod::Op(TS) & # 3rd candle is white
+      quantmod::Cl(TS) > (quantmod::Op(LAG2TS) + quantmod::Cl(LAG2TS)) / 2, # 3rd candle closes above middle of 1st candle body
+    TS
+  )
 
-  if (!"MorningStar" %in% colnames(csp_star_result) ||
-    !"EveningStar" %in% colnames(csp_star_result)) {
-    stop("csp_star_result must contain 'MorningStar' and 'EveningStar' columns")
-  }
+  EveningStar <- xts::reclass(
+    LCB2[, 1] & # 1st candle: long white candle body
+      GAP1[, 1] & # gap up from 1st to 2nd candle
+      (SCB1[, 1] | SCB1[, 2]) & # 2nd candle: short black or white candle body
+      quantmod::Cl(TS) < quantmod::Op(TS) & # third candle is black
+      quantmod::Cl(TS) < (quantmod::Op(LAG2TS) + quantmod::Cl(LAG2TS)) / 2, # 3rd candle closes below middle of 1st candle body
+    TS
+  )
 
-  # Convert Date to proper format if needed
-  csp_star_result$Date <- as.Date(csp_star_result$Date)
+  result <- cbind(MorningStar, EveningStar)
+  colnames(result) <- c("MorningStar", "EveningStar")
+  xts::xtsAttributes(result) <- list(bars = 3)
 
-  # Merge with the original data to get the Close prices
-  merged_data <- merge(eCandleSticks_result$data, csp_star_result, by = "Date", all.x = TRUE)
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Extract Morning Star points
-  morning_star_points <- merged_data[merged_data$MorningStar == TRUE & !is.na(merged_data$MorningStar), ]
-
-  # Extract Evening Star points
-  evening_star_points <- merged_data[merged_data$EveningStar == TRUE & !is.na(merged_data$EveningStar), ]
-
-  # Add CSP Star points to the price plot
-  price_plot_with_stars <- eCandleSticks_result$price_plot
-
-  # Add Morning Star points (if any)
-  if (nrow(morning_star_points) > 0) {
-    price_plot_with_stars <- price_plot_with_stars +
-      ggplot2::geom_point(
-        data = morning_star_points,
-        aes(x = Date, y = Close, color = "Morning Star"),
-        size = point_size,
-        shape = point_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add Evening Star points (if any)
-  if (nrow(evening_star_points) > 0) {
-    price_plot_with_stars <- price_plot_with_stars +
-      ggplot2::geom_point(
-        data = evening_star_points,
-        aes(x = Date, y = Close, color = "Evening Star"),
-        size = point_size,
-        shape = point_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any star points
-  if (nrow(morning_star_points) > 0 || nrow(evening_star_points) > 0) {
-    price_plot_with_stars <- price_plot_with_stars +
-      ggplot2::scale_color_manual(
-        name = "CSP Star Patterns",
-        values = c("Morning Star" = morning_star_color, "Evening Star" = evening_star_color),
-        breaks = c("Morning Star", "Evening Star")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = point_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_stars
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_stars, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_stars
-  }
-
-  # Add csp_star_result to the output for reference
-  eCandleSticks_result$csp_star_data <- csp_star_result
-  eCandleSticks_result$morning_star_points <- morning_star_points
-  eCandleSticks_result$evening_star_points <- evening_star_points
-
-  return(eCandleSticks_result)
 }

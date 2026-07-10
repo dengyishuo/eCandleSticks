@@ -22,7 +22,7 @@
 #' }
 #'
 #' @author Andreas Voellenklee
-#' @seealso \code{\link{CSPLongCandle}}
+#' @seealso \code{\link{addCSPLongCandle}}
 #'
 #' @examples
 #' \dontrun{

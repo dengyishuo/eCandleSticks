@@ -2,58 +2,153 @@
 % Please edit documentation in R/addCSPThreeBlackCrows.R
 \name{addCSPThreeBlackCrows}
 \alias{addCSPThreeBlackCrows}
-\title{Add CSP Three Black Crows Points to Candlestick Chart}
+\title{Three Black Crows Candlestick Pattern}
 \usage{
 addCSPThreeBlackCrows(
-  eCandleSticks_result,
-  csp_three_black_crows_result,
-  three_black_crows_color = "darkred",
-  point_size = 3,
-  three_black_crows_shape = 4,
-  point_alpha = 0.8,
-  mark_at_close = TRUE
+  x,
+  strict = TRUE,
+  n = 20,
+  minbodysizeMedian = 1,
+  output = c("xts", "tibble", "data.frame")
 )
 }
 \arguments{
-\item{eCandleSticks_result}{The result object returned by eCandleSticks function}
+\item{x}{xts Time Series containing Open and Close prices}
 
-\item{csp_three_black_crows_result}{The result object from CSP Three Black Crows analysis,
-which should be a data frame containing a 'Date' column and a logical column 'ThreeBlackCrows'}
+\item{strict}{If FALSE, use less strict conditions to detect pattern. Default is TRUE.}
 
-\item{three_black_crows_color}{Color for Three Black Crows points. Default "darkred".}
+\item{n}{Number of preceding candles to calculate median candle length. Default is 20.}
 
-\item{point_size}{Size for the Three Black Crows points. Default 3.}
+\item{minbodysizeMedian}{Minimum candle length in relation to the median candle length
+of \code{n} preceding candles. Default is 1.}
 
-\item{three_black_crows_shape}{Shape for Three Black Crows points. Default 4 (cross).}
-
-\item{point_alpha}{Alpha transparency for the Three Black Crows points. Default 0.8.}
-
-\item{mark_at_close}{Whether to mark at the close price. Default TRUE.}
+\item{output}{Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.}
 }
 \value{
-A modified eCandleSticks result list with Three Black Crows points added to the price plot
-and the combined plot updated accordingly.
+A xts object containing the column:
+\itemize{
+\item ThreeBlackCrows: TRUE if Three Black Crows pattern detected
+}
 }
 \description{
-This function adds CSP Three Black Crows points to a candlestick chart
-created by eCandleSticks using the results from a CSP Three Black Crows analysis,
-and recombines it with the volume subplot if it exists.
+Identifies Three Black Crows patterns in an Open/Close price series.
+This is a three-candle bearish reversal pattern that occurs during an uptrend.
+}
+\details{
+Number of candle lines: \bold{3}
+
+The Three Black Crows pattern is characterized by three long black candlesticks
+stepping downward like a staircase.
+
+In strict mode (default):
+\itemize{
+\item The opening of each day is higher than the previous close but lower than the previous open
+\item Each candle must have a long body relative to the median of previous candles
+\item The pattern appears during an uptrend
+}
+
+When strict = FALSE, candle 2 and/or 3 of the formation may open lower than the
+previous day's close, thus forming a gap.
+}
+\note{
+The function filters patterns that look like three black crows, without considering
+the current trend direction. If only patterns in uptrends should be filtered,
+an external trend detection function must be used. See examples.
 }
 \examples{
 \dontrun{
-library(quantmod)
-getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+getSymbols("YHOO", adjust = TRUE)
+addCSPThreeBlackCrows(YHOO)
+addCSPThreeBlackCrows(YHOO, strict = FALSE)
 
-# Create candlestick chart
-result <- eCandleSticks(AAPL)
+# Filter for three black crows that occur in uptrends
+ThreeBlackCrows <- addCSPThreeBlackCrows(YHOO) &
+  TrendDetectionChannel(lag(YHOO, k = 3))[, "UpTrend"]
 
-# Get CSP Three Black Crows results
-csp_three_black_crows_data <- CSPThreeBlackCrows(AAPL) # This returns a data frame with ThreeBlackCrows column
+# How often does that occur?
+colSums(ThreeBlackCrows, na.rm = TRUE)
+}
 
-# Add Three Black Crows points
-result_with_three_black_crows <- addCSPThreeBlackCrows(result, csp_three_black_crows_data)
-
-# Display the combined plot with Three Black Crows points
-print(result_with_three_black_crows$combined_plot)
+}
+\references{
+The following sites were used to code/document this indicator:
+\itemize{
+\item \url{http://www.candlesticker.com/Bullish.asp}
+\item \url{http://www.candlesticker.com/Bearish.asp}
 }
 }
+\seealso{
+\code{\link{addCSPThreeWhiteSoldiers}}
+\code{\link{addCSPNLongBlackCandles}}
+\code{\link{addCSPNLongBlackCandleBodies}}
+\code{\link{addCSPThreeLineStrike}}
+
+Other pattern-3bar:
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=addCSPThreeWhiteSoldiers]{addCSPThreeWhiteSoldiers()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}},
+\code{\link[=drawCSPThreeWhiteSoldiers]{drawCSPThreeWhiteSoldiers()}}
+
+Other pattern-bear:
+\code{\link[=addCSPDarkCloudCover]{addCSPDarkCloudCover()}},
+\code{\link[=addCSPDoji]{addCSPDoji()}},
+\code{\link[=addCSPEngulfing]{addCSPEngulfing()}},
+\code{\link[=addCSPGap]{addCSPGap()}},
+\code{\link[=addCSPHangingMan]{addCSPHangingMan()}},
+\code{\link[=addCSPHarami]{addCSPHarami()}},
+\code{\link[=addCSPKicking]{addCSPKicking()}},
+\code{\link[=addCSPLongCandle]{addCSPLongCandle()}},
+\code{\link[=addCSPLongCandleBody]{addCSPLongCandleBody()}},
+\code{\link[=addCSPMarubozu]{addCSPMarubozu()}},
+\code{\link[=addCSPNLongBlackCandleBodies]{addCSPNLongBlackCandleBodies()}},
+\code{\link[=addCSPNLongBlackCandles]{addCSPNLongBlackCandles()}},
+\code{\link[=addCSPNLowerClose]{addCSPNLowerClose()}},
+\code{\link[=addCSPShootingStar]{addCSPShootingStar()}},
+\code{\link[=addCSPShortCandle]{addCSPShortCandle()}},
+\code{\link[=addCSPShortCandleBody]{addCSPShortCandleBody()}},
+\code{\link[=addCSPStar]{addCSPStar()}},
+\code{\link[=addCSPStomach]{addCSPStomach()}},
+\code{\link[=addCSPTasukiGap]{addCSPTasukiGap()}},
+\code{\link[=addCSPThreeInside]{addCSPThreeInside()}},
+\code{\link[=addCSPThreeLineStrike]{addCSPThreeLineStrike()}},
+\code{\link[=addCSPThreeMethods]{addCSPThreeMethods()}},
+\code{\link[=addCSPThreeOutside]{addCSPThreeOutside()}},
+\code{\link[=drawCSPDarkCloudCover]{drawCSPDarkCloudCover()}},
+\code{\link[=drawCSPDoji]{drawCSPDoji()}},
+\code{\link[=drawCSPEngulfing]{drawCSPEngulfing()}},
+\code{\link[=drawCSPGap]{drawCSPGap()}},
+\code{\link[=drawCSPHangingMan]{drawCSPHangingMan()}},
+\code{\link[=drawCSPHarami]{drawCSPHarami()}},
+\code{\link[=drawCSPKicking]{drawCSPKicking()}},
+\code{\link[=drawCSPLongCandle]{drawCSPLongCandle()}},
+\code{\link[=drawCSPLongCandleBody]{drawCSPLongCandleBody()}},
+\code{\link[=drawCSPMarubozu]{drawCSPMarubozu()}},
+\code{\link[=drawCSPNLongBlackCandleBodies]{drawCSPNLongBlackCandleBodies()}},
+\code{\link[=drawCSPNLongBlackCandles]{drawCSPNLongBlackCandles()}},
+\code{\link[=drawCSPNLowerClose]{drawCSPNLowerClose()}},
+\code{\link[=drawCSPShootingStar]{drawCSPShootingStar()}},
+\code{\link[=drawCSPShortCandle]{drawCSPShortCandle()}},
+\code{\link[=drawCSPShortCandleBody]{drawCSPShortCandleBody()}},
+\code{\link[=drawCSPStar]{drawCSPStar()}},
+\code{\link[=drawCSPStomach]{drawCSPStomach()}},
+\code{\link[=drawCSPTasukiGap]{drawCSPTasukiGap()}},
+\code{\link[=drawCSPThreeBlackCrows]{drawCSPThreeBlackCrows()}},
+\code{\link[=drawCSPThreeInside]{drawCSPThreeInside()}},
+\code{\link[=drawCSPThreeLineStrike]{drawCSPThreeLineStrike()}},
+\code{\link[=drawCSPThreeMethods]{drawCSPThreeMethods()}},
+\code{\link[=drawCSPThreeOutside]{drawCSPThreeOutside()}}
+}
+\author{
+Andreas Voellenklee
+}
+\concept{pattern-3bar}
+\concept{pattern-bear}

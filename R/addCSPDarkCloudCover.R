@@ -1,124 +1,103 @@
-#' Add CSP Dark Cloud Cover Points to Candlestick Chart
+#' Dark Cloud Cover Candlestick Pattern
 #'
-#' This function adds CSP Dark Cloud Cover points to a candlestick chart created by eCandleSticks
-#' using the results from a CSP Dark Cloud Cover analysis, and recombines it with the volume subplot if it exists.
+#' Identifies Dark Cloud Cover patterns in an Open/Close price series.
+#' This is a two-candle bearish reversal pattern that occurs during an uptrend.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_dark_cloud_result The result object from CSP Dark Cloud Cover analysis, which should be a data frame
-#'        containing a 'Date' column and a logical column 'DarkCloudCover'
-#' @param point_color Color for the Dark Cloud Cover points. Default "purple".
-#' @param point_size Size for the Dark Cloud Cover points. Default 3.
-#' @param point_shape Shape for the Dark Cloud Cover points. Default 17 (triangle).
-#' @param point_alpha Alpha transparency for the Dark Cloud Cover points. Default 0.8.
+#' @param x xts Time Series containing Open and Close prices
+#' @param n Number of preceding candles to calculate median candle body length. Default is 20.
+#' @param minbodysizeMedian Minimum body length relative to the median of the past \code{n} body sizes. Default is 1.
 #'
-#' @return A modified eCandleSticks result list with Dark Cloud Cover points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' A Dark Cloud Cover pattern consists of:
+#' \enumerate{
+#' \item A long white candlestick (body length > median of past n candles)
+#' \item A gap higher opening on the next day
+#' \item A black candlestick that closes more than halfway into the prior white candlestick's body
+#' \item The close of the second candle is still above the open of the first candle
+#' }
+#'
+#' This pattern is considered a bearish reversal signal when it appears during an uptrend.
+#'
+#' @return
+#' A xts object containing the column:
+#' \itemize{
+#' \item DarkCloudCover: TRUE if Dark Cloud Cover pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{http://www.candlesticker.com/Bearish.asp}
+#' \item \url{http://www.onlinetradingconcepts.com/TechnicalAnalysis/Candlesticks/DarkCloudCover.html}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like dark cloud covers, without considering
+#' the current trend direction. If only patterns in uptrends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' The counterpart of this pattern is \code{\link{addCSPPiercingPattern}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPDarkCloudCover(YHOO)
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Dark Cloud Cover results
-#' # This returns a data frame with DarkCloudCover column
-#' csp_dark_cloud_data <- CSPDarkCloudCover(AAPL)
-#'
-#' # Add Dark Cloud Cover points
-#' result_with_dark_cloud <- addCSPDarkCloudCover(result, csp_dark_cloud_data)
-#'
-#' # Display the combined plot with Dark Cloud Cover points
-#' print(result_with_dark_cloud$combined_plot)
+#' # Filter dark cloud covers that occur in uptrends.
+#' # The lag of 2 periods of the time series for trend detection
+#' # ensures that the uptrend is active before the
+#' # dark cloud cover occurs.
+#' addCSPDarkCloudCover(YHOO) &
+#'   TrendDetectionChannel(lag(YHOO, k = 2))[, "UpTrend"]
 #' }
-addCSPDarkCloudCover <- function(eCandleSticks_result, csp_dark_cloud_result,
-                                 point_color = "purple", point_size = 3,
-                                 point_shape = 17, point_alpha = 0.8) {
-  # Validate csp_dark_cloud_result
-  if (!is.data.frame(csp_dark_cloud_result) && !xts::is.xts(csp_dark_cloud_result)) {
-    stop("csp_dark_cloud_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPDarkCloudCover <- function(x, n = 20, minbodysizeMedian = 1,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_dark_cloud_result)) {
-    csp_dark_cloud_result <- data.frame(
-      Date = zoo::index(csp_dark_cloud_result),
-      as.data.frame(csp_dark_cloud_result)
-    )
-  }
+  LAGTS <- LagOC(TS, k = 1)
+  LongCandleBody <- addCSPLongCandleBody(LAGTS, n = n, threshold = minbodysizeMedian)
 
-  if (!"Date" %in% colnames(csp_dark_cloud_result)) {
-    stop("csp_dark_cloud_result must contain a 'Date' column")
-  }
+  DarkCloudCover <- xts::reclass(
+    LongCandleBody[, "LongWhiteCandleBody"] & # first candle is white and longer than median of past n candles
+      quantmod::Op(TS) > quantmod::Cl(LAGTS) & # second candle opens higher than close of 1st candle
+      (quantmod::Op(LAGTS) + quantmod::Cl(LAGTS)) / 2 >= quantmod::Cl(TS) & # second candle closes at or below half of 1st candles' body
+      quantmod::Cl(TS) > quantmod::Op(LAGTS), # close of second candle is higher than open of 1st candle
+    TS
+  )
 
-  if (!"DarkCloudCover" %in% colnames(csp_dark_cloud_result)) {
-    stop("csp_dark_cloud_result must contain a 'DarkCloudCover' column")
-  }
-
-  # Convert Date to proper format if needed
-  csp_dark_cloud_result$Date <- as.Date(csp_dark_cloud_result$Date)
-
-  # Merge with the original data to get the Close prices
-  merged_data <- merge(eCandleSticks_result$data, csp_dark_cloud_result, by = "Date", all.x = TRUE)
-
-  # Extract Dark Cloud Cover points
-  dark_cloud_points <- merged_data[merged_data$DarkCloudCover == TRUE & !is.na(merged_data$DarkCloudCover), ]
-
-  # Add Dark Cloud Cover points to the price plot
-  price_plot_with_dark_cloud <- eCandleSticks_result$price_plot
-
-  # Add Dark Cloud Cover points (if any)
-  if (nrow(dark_cloud_points) > 0) {
-    price_plot_with_dark_cloud <- price_plot_with_dark_cloud +
-      ggplot2::geom_point(
-        data = dark_cloud_points,
-        aes(x = Date, y = Close, color = "Dark Cloud Cover"),
-        size = point_size,
-        shape = point_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Dark Cloud Cover points
-  if (nrow(dark_cloud_points) > 0) {
-    price_plot_with_dark_cloud <- price_plot_with_dark_cloud +
-      ggplot2::scale_color_manual(
-        name = "CSP Patterns",
-        values = c("Dark Cloud Cover" = point_color),
-        breaks = c("Dark Cloud Cover")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = point_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_dark_cloud
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_dark_cloud, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_dark_cloud
-  }
-
-  # Add csp_dark_cloud_result to the output for reference
-  eCandleSticks_result$csp_dark_cloud_data <- csp_dark_cloud_result
-  eCandleSticks_result$dark_cloud_points <- dark_cloud_points
-
-  return(eCandleSticks_result)
+  colnames(DarkCloudCover) <- c("DarkCloudCover")
+  xts::xtsAttributes(DarkCloudCover) <- list(bars = 2)
+  return(DarkCloudCover)
 }

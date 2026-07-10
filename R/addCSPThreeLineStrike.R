@@ -1,153 +1,164 @@
-#' Add CSP Three Line Strike Patterns to Candlestick Chart
+#' Three Line Strike Candlestick Pattern
 #'
-#' This function adds CSP Three Line Strike patterns (Bullish and Bearish)
-#' to a candlestick chart created by eCandleSticks using the results from CSPThreeLineStrike analysis.
+#' Identifies bullish and bearish Three Line Strike patterns in an Open/Close price series.
+#' This is a four-candle continuation pattern that signals potential trend continuation.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_three_line_result The result object from CSPThreeLineStrike analysis, which should be an xts object
-#'        containing logical columns 'Bull.ThreeLineStrike' and 'Bear.ThreeLineStrike'
-#' @param bull_color Color for Bullish Three Line Strike points. Default "blue".
-#' @param bear_color Color for Bearish Three Line Strike points. Default "purple".
-#' @param point_size Size for the pattern points. Default 4.
-#' @param bull_shape Shape for Bullish pattern points. Default 24 (up triangle).
-#' @param bear_shape Shape for Bearish pattern points. Default 25 (down triangle).
-#' @param point_alpha Alpha transparency for the pattern points. Default 0.8.
-#' @param mark_at_close Whether to mark at the close price. If FALSE, marks at the high/low. Default TRUE.
+#' @param x xts Time Series containing Open and Close prices
+#' @param n Number of preceding candles to calculate median candle length. Default is 25.
+#' @param minbodysizeMedian Minimum candle length in relation to the median candle length
+#' of \code{n} preceding candles. Default is 0.5.
 #'
-#' @return A modified eCandleSticks result list with Three Line Strike patterns added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point aes
-#' @importFrom cowplot plot_grid
-#' @importFrom xts is.xts
-#' @importFrom zoo index
+#' @details
+#' Number of candle lines: \bold{4}
+#'
+#' \strong{Bullish Three Line Strike:}
+#' \itemize{
+#' \item The first three candles must all be white with not too small candle bodies
+#' \item The close of the second candle is above the close of the first
+#' \item The close of the third candle is above the close of the second
+#' \item The open of the last candle is at or above the close of the third candle
+#' \item The price then moves down heavily and closes at or below the open of the first candle
+#' \item This pattern signals a potential continuation of a downtrend
+#' }
+#'
+#' \strong{Bearish Three Line Strike:}
+#' \itemize{
+#' \item The opposite of the bullish pattern
+#' \item Three black candles followed by a long white candle
+#' \item This pattern signals a potential continuation of an uptrend
+#' }
+#'
+#' This formation is very rare.
+#'
+#' @return
+#' A xts object containing the columns:
+#' \itemize{
+#' \item Bull.ThreeLineStrike: TRUE if bullish Three Line Strike pattern detected
+#' \item Bear.ThreeLineStrike: TRUE if bearish Three Line Strike pattern detected
+#' }
+#'
+#' @references
+#' The following sites were used to code/document this indicator:
+#' \itemize{
+#' \item \url{https://hitandruncandlesticks.com/bullish-three-line-strike/}
+#' \item \url{https://hitandruncandlesticks.com/bearish-three-line-strike/}
+#' \item \url{http://thepatternsite.com/ThreeLineStrikeBull.html}
+#' }
+#'
+#' @note
+#' The function filters patterns that look like three line strikes, without considering
+#' the current trend direction. If only patterns in specific trends should be filtered,
+#' an external trend detection function must be used. See examples.
+#'
+#' @seealso
+#' \code{\link{addCSPNLongWhiteCandleBodies}}
+#' \code{\link{addCSPNLongBlackCandleBodies}}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
+#' Sys.setenv(TZ = "UTC")
 #'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
+#' getSymbols("COG")
+#' TLS <- addCSPThreeLineStrike(COG)
 #'
-#' # Get CSP Three Line Strike results
-#' csp_three_line_data <- CSPThreeLineStrike(AAPL)
+#' # How often does that occur?
+#' colSums(TLS, na.rm = TRUE)
 #'
-#' # Add Three Line Strike patterns
-#' result_with_patterns <- addCSPThreeLineStrike(result, csp_three_line_data)
+#' # When did that occur?
+#' TLS[TLS[, 1] > 0 | TLS[, 2] > 0, ]
 #'
-#' # Display the combined plot with pattern points
-#' print(result_with_patterns$combined_plot)
+#' # Filter for bearish three line strikes that occur in downtrends
+#' TLS1 <- addCSPThreeLineStrike(COG)[, "Bear.ThreeLineStrike"] &
+#'   TrendDetectionChannel(lag(COG, k = 4))[, "DownTrend"]
+#' TLS1[TLS1[, 1] > 0, ]
+#'
+#' # Show in a chart
+#' chartSeries(COG["2014-09/2014-10"])
 #' }
-addCSPThreeLineStrike <- function(eCandleSticks_result, csp_three_line_result,
-                                  bull_color = "blue", bear_color = "purple",
-                                  point_size = 4, bull_shape = 24, bear_shape = 25,
-                                  point_alpha = 0.8, mark_at_close = TRUE) {
-  # Validate csp_three_line_result
-  if (!xts::is.xts(csp_three_line_result)) {
-    stop("csp_three_line_result must be an xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-3bar
+#' @family pattern-bull
+#' @family pattern-bear
+#' @export
+#' @importFrom quantmod Op Cl
+#' @importFrom xts reclass xtsAttributes
+#' @importFrom stats lag
+addCSPThreeLineStrike <- function(x, n = 25, minbodysizeMedian = 0.5,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!is.OC(TS)) {
+    stop("Price series must contain Open and Close.")
   }
 
-  # Check if required columns exist
-  required_cols <- c("Bull.ThreeLineStrike", "Bear.ThreeLineStrike")
-  if (!all(required_cols %in% colnames(csp_three_line_result))) {
-    stop("csp_three_line_result must contain 'Bull.ThreeLineStrike' and 'Bear.ThreeLineStrike' columns")
-  }
-
-  # Convert to data frame
-  csp_three_line_df <- data.frame(
-    Date = zoo::index(csp_three_line_result),
-    as.data.frame(csp_three_line_result)
+  # 手动生成滞后序列并明确命名列名
+  lagged_oc <- do.call(merge, lapply(0:3, function(k) {
+    merge(lag(quantmod::Op(TS), -k), lag(quantmod::Cl(TS), -k))
+  }))
+  colnames(lagged_oc) <- c(
+    "Op.L0", "Cl.L0", "Op.L1", "Cl.L1",
+    "Op.L2", "Cl.L2", "Op.L3", "Cl.L3"
   )
 
-  # Convert Date to proper format
-  csp_three_line_df$Date <- as.Date(csp_three_line_df$Date)
+  # 提取需要的列（使用列名代替Cl()/Op()自动匹配）
+  Cl_LAGTS <- lagged_oc[, c("Cl.L0", "Cl.L1", "Cl.L2", "Cl.L3")]
+  Op_LAGTS <- lagged_oc[, c("Op.L0", "Op.L1", "Op.L2", "Op.L3")]
 
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_three_line_df, by = "Date", all.x = TRUE)
+  # 获取三连阳/阴信号（假设这些函数返回单列结果）
+  THREELWCB <- addCSPNLongWhiteCandleBodies(TS, N = 3, n = n, threshold = minbodysizeMedian)
+  LAGTHREELWCB <- stats::lag(THREELWCB, 1) # 信号滞后1期
+  THREELBCB <- addCSPNLongBlackCandleBodies(TS, N = 3, n = n, threshold = minbodysizeMedian)
+  LAGTHREELBCB <- stats::lag(THREELBCB, 1)
 
-  # Extract different types of pattern points
-  bull_points <- merged_data[merged_data$Bull.ThreeLineStrike == TRUE & !is.na(merged_data$Bull.ThreeLineStrike), ]
-  bear_points <- merged_data[merged_data$Bear.ThreeLineStrike == TRUE & !is.na(merged_data$Bear.ThreeLineStrike), ]
+  # 牛市三线打击形态判断（使用明确的列名引用）
+  BullTLS <- reclass(
+    LAGTHREELWCB[, 1] & # 前三根为长白蜡烛（滞后1期）
+      Cl_LAGTS$Cl.L2 > Cl_LAGTS$Cl.L3 & # 第2根收盘 > 第1根收盘
+      Cl_LAGTS$Cl.L1 > Cl_LAGTS$Cl.L2 & # 第3根收盘 > 第2根收盘
+      Op_LAGTS$Op.L0 >= Cl_LAGTS$Cl.L1 & # 第4根开盘 >= 第3根收盘
+      Cl_LAGTS$Cl.L0 <= Op_LAGTS$Op.L3, # 第4根收盘 <= 第1根开盘
+    TS
+  )
 
-  # Determine y-value for marking
-  if (mark_at_close) {
-    bull_points$PatternLevel <- bull_points$Close
-    bear_points$PatternLevel <- bear_points$Close
-  } else {
-    # For Bullish pattern, mark at the High price
-    # For Bearish pattern, mark at the Low price
-    bull_points$PatternLevel <- bull_points$High
-    bear_points$PatternLevel <- bear_points$Low
-  }
+  # 熊市三线打击形态判断
+  BearTLS <- reclass(
+    LAGTHREELBCB[, 1] & # 前三根为长黑蜡烛（滞后1期）
+      Cl_LAGTS$Cl.L2 < Cl_LAGTS$Cl.L3 & # 第2根收盘 < 第1根收盘
+      Cl_LAGTS$Cl.L1 < Cl_LAGTS$Cl.L2 & # 第3根收盘 < 第2根收盘
+      Op_LAGTS$Op.L0 <= Cl_LAGTS$Cl.L1 & # 第4根开盘 <= 第3根收盘
+      Cl_LAGTS$Cl.L0 >= Op_LAGTS$Op.L3, # 第4根收盘 >= 第1根开盘
+    TS
+  )
 
-  # Add pattern points to the price plot
-  price_plot_with_patterns <- eCandleSticks_result$price_plot
+  result <- cbind(BullTLS, BearTLS)
+  colnames(result) <- c("Bull.ThreeLineStrike", "Bear.ThreeLineStrike")
+  xts::xtsAttributes(result) <- list(bars = 4)
 
-  # Add Bullish Three Line Strike points (if any)
-  if (nrow(bull_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::geom_point(
-        data = bull_points,
-        aes(x = Date, y = PatternLevel, color = "Bullish Three Line Strike"),
-        size = point_size,
-        shape = bull_shape,
-        alpha = point_alpha
-      )
-  }
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Add Bearish Three Line Strike points (if any)
-  if (nrow(bear_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::geom_point(
-        data = bear_points,
-        aes(x = Date, y = PatternLevel, color = "Bearish Three Line Strike"),
-        size = point_size,
-        shape = bear_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any pattern points
-  if (nrow(bull_points) > 0 || nrow(bear_points) > 0) {
-    price_plot_with_patterns <- price_plot_with_patterns +
-      ggplot2::scale_color_manual(
-        name = "CSP Three Line Strike Patterns",
-        values = c(
-          "Bullish Three Line Strike" = bull_color,
-          "Bearish Three Line Strike" = bear_color
-        ),
-        breaks = c("Bullish Three Line Strike", "Bearish Three Line Strike")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = c(bull_shape, bear_shape),
-            size = rep(point_size, 2),
-            alpha = rep(point_alpha, 2)
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_patterns
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_patterns, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_patterns
-  }
-
-  # Add pattern data to the output for reference
-  eCandleSticks_result$csp_three_line_data <- csp_three_line_df
-  eCandleSticks_result$bull_points <- bull_points
-  eCandleSticks_result$bear_points <- bear_points
-
-  return(eCandleSticks_result)
 }

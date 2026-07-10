@@ -41,7 +41,7 @@ CandleBodyLength(YHOO)
 
 }
 \seealso{
-\code{\link{CSPLongCandle}}
+\code{\link{addCSPLongCandle}}
 }
 \author{
 Andreas Voellenklee

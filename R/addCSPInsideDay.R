@@ -1,134 +1,79 @@
-#' Add CSP Inside Day Points to Candlestick Chart
+#' Identify Inside Day Patterns
 #'
-#' This function adds CSP Inside Day points to a candlestick chart created by eCandleSticks
-#' using the results from a CSP Inside Day analysis, and recombines it with the volume subplot if it exists.
+#' Detects inside day patterns in an OHLC price series. An inside day occurs when
+#' the current bar remains completely within the previous day's high and low range.
 #'
-#' @param eCandleSticks_result The result object returned by eCandleSticks function
-#' @param csp_inside_day_result The result object from CSP Inside Day analysis, which should be a data frame
-#'        containing a 'Date' column and a logical column 'InsideDay'
-#' @param inside_day_color Color for Inside Day points. Default "purple".
-#' @param point_size Size for the Inside Day points. Default 3.
-#' @param inside_day_shape Shape for Inside Day points. Default 23 (diamond).
-#' @param point_alpha Alpha transparency for the Inside Day points. Default 0.8.
-#' @param mark_at_midpoint Whether to mark at the midpoint of the candle instead of Close price. Default TRUE.
+#' @param x xts Time Series containing OHLC prices
 #'
-#' @return A modified eCandleSticks result list with Inside Day points added to the price plot
-#' and the combined plot updated accordingly.
-#' @export
-#' @importFrom ggplot2 geom_point
-#' @importFrom cowplot plot_grid
+#' @details
+#' Number of candle lines: \bold{2}
+#'
+#' \strong{Inside Day:}
+#' In an inside day, the current bar remains completely within the previous day's
+#' bar high and low range. This pattern often indicates consolidation and can
+#' precede significant price moves.
+#'
+#' @return A xts object containing the column:
+#' \itemize{
+#' \item InsideDay: TRUE if current candle is an inside day
+#' }
+#'
+#' @references
+#' \url{http://www.investopedia.com/terms/i/inside_day.asp#axzz1jWelu1cm}
+#'
+#' @author Andreas Voellenklee
 #'
 #' @examples
 #' \dontrun{
-#' library(quantmod)
-#' getSymbols("AAPL", src = "yahoo", from = "2023-01-01", to = "2025-09-08")
-#'
-#' # Create candlestick chart
-#' result <- eCandleSticks(AAPL)
-#'
-#' # Get CSP Inside Day results
-#' csp_inside_day_data <- CSPInsideDay(AAPL) # This returns a data frame with InsideDay column
-#'
-#' # Add Inside Day points
-#' result_with_inside_day <- addCSPInsideDay(result, csp_inside_day_data)
-#'
-#' # Display the combined plot with Inside Day points
-#' print(result_with_inside_day$combined_plot)
+#' getSymbols("YHOO", adjust = TRUE)
+#' addCSPInsideDay(YHOO)
 #' }
-addCSPInsideDay <- function(eCandleSticks_result, csp_inside_day_result,
-                            inside_day_color = "purple", point_size = 3,
-                            inside_day_shape = 23, point_alpha = 0.8,
-                            mark_at_midpoint = TRUE) {
-  # Validate csp_inside_day_result
-  if (!is.data.frame(csp_inside_day_result) && !xts::is.xts(csp_inside_day_result)) {
-    stop("csp_inside_day_result must be a data frame or xts object")
+#'
+#' @importFrom tibble as_tibble
+#' @importFrom zoo index
+#' @param output Character. Return format: \code{"xts"} (default), \code{"tibble"}, or \code{"data.frame"}.
+#' @family pattern-2bar
+#' @export
+#' @importFrom quantmod Hi Lo has.Op has.Hi has.Lo has.Cl
+#' @importFrom xts reclass xtsAttributes
+addCSPInsideDay <- function(x,
+                              output = c("xts", "tibble", "data.frame")) {
+  # ── accept data.frame / tibble input ─────────────────────────────────────
+  if (!xts::is.xts(x)) {
+    nms <- tolower(colnames(x))
+    date_col  <- colnames(x)[nms %in% c("date", "time", "index")][1]
+    open_col  <- colnames(x)[nms == "open"][1]
+    high_col  <- colnames(x)[nms == "high"][1]
+    low_col   <- colnames(x)[nms == "low"][1]
+    close_col <- colnames(x)[nms == "close"][1]
+    if (any(is.na(c(date_col, open_col, high_col, low_col, close_col))))
+      stop("x must contain open/high/low/close columns or be an xts OHLC object.")
+    mat <- as.matrix(x[, c(open_col, high_col, low_col, close_col)])
+    colnames(mat) <- c("Open", "High", "Low", "Close")
+    x <- xts::xts(mat, order.by = as.Date(x[[date_col]]))
+  }
+  TS <- x
+
+  if (!(has.Op(TS) && has.Hi(TS) && has.Lo(TS) && has.Cl(TS))) {
+    stop("Price series must contain Open, High, Low and Close.")
   }
 
-  # Convert to data frame if it's an xts object
-  if (xts::is.xts(csp_inside_day_result)) {
-    csp_inside_day_result <- data.frame(
-      Date = zoo::index(csp_inside_day_result),
-      as.data.frame(csp_inside_day_result)
-    )
-  }
+  LAGTS <- LagOHLC(TS, k = 1)
+  result <- xts::reclass(
+    quantmod::Hi(TS) <= quantmod::Hi(LAGTS) &
+      quantmod::Lo(TS) >= quantmod::Lo(LAGTS),
+    TS
+  )
 
-  if (!"Date" %in% colnames(csp_inside_day_result)) {
-    stop("csp_inside_day_result must contain a 'Date' column")
-  }
+  colnames(result) <- "InsideDay"
+  xts::xtsAttributes(result) <- list(bars = 2)
 
-  if (!"InsideDay" %in% colnames(csp_inside_day_result)) {
-    stop("csp_inside_day_result must contain an 'InsideDay' column")
-  }
+  # ── output format ────────────────────────────────────────────────────────
+  output <- match.arg(output)
+  if (output == "xts") return(result)
+  df <- data.frame(date = zoo::index(result), as.data.frame(result),
+                   row.names = NULL, check.names = FALSE)
+  if (output == "tibble") return(tibble::as_tibble(df))
+  df
 
-  # Convert Date to proper format if needed
-  csp_inside_day_result$Date <- as.Date(csp_inside_day_result$Date)
-
-  # Merge with the original data to get the OHLC prices
-  merged_data <- merge(eCandleSticks_result$data, csp_inside_day_result, by = "Date", all.x = TRUE)
-
-  # Extract Inside Day points
-  inside_day_points <- merged_data[merged_data$InsideDay == TRUE & !is.na(merged_data$InsideDay), ]
-
-  # Determine y-value for marking
-  if (mark_at_midpoint) {
-    # Mark at the midpoint of the candle (average of High and Low)
-    inside_day_points$InsideDayLevel <- (inside_day_points$High + inside_day_points$Low) / 2
-  } else {
-    # Mark at Close price
-    inside_day_points$InsideDayLevel <- inside_day_points$Close
-  }
-
-  # Add Inside Day points to the price plot
-  price_plot_with_inside_day <- eCandleSticks_result$price_plot
-
-  # Add Inside Day points (if any)
-  if (nrow(inside_day_points) > 0) {
-    price_plot_with_inside_day <- price_plot_with_inside_day +
-      ggplot2::geom_point(
-        data = inside_day_points,
-        aes(x = Date, y = InsideDayLevel, color = "Inside Day"),
-        size = point_size,
-        shape = inside_day_shape,
-        alpha = point_alpha
-      )
-  }
-
-  # Add color scale and legend only if there are any Inside Day points
-  if (nrow(inside_day_points) > 0) {
-    price_plot_with_inside_day <- price_plot_with_inside_day +
-      ggplot2::scale_color_manual(
-        name = "CSP Patterns",
-        values = c("Inside Day" = inside_day_color),
-        breaks = c("Inside Day")
-      ) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(
-          override.aes = list(
-            shape = inside_day_shape,
-            size = point_size,
-            alpha = point_alpha
-          )
-        )
-      )
-  }
-
-  # Update the result with the modified price plot
-  eCandleSticks_result$price_plot <- price_plot_with_inside_day
-
-  # Recombine with volume plot if it exists
-  if (!is.null(eCandleSticks_result$volume_plot)) {
-    eCandleSticks_result$combined_plot <- cowplot::plot_grid(
-      price_plot_with_inside_day, eCandleSticks_result$volume_plot,
-      ncol = 1, align = "v", axis = "lr",
-      rel_heights = c(2, 1)
-    )
-  } else {
-    eCandleSticks_result$combined_plot <- price_plot_with_inside_day
-  }
-
-  # Add csp_inside_day_result to the output for reference
-  eCandleSticks_result$csp_inside_day_data <- csp_inside_day_result
-  eCandleSticks_result$inside_day_points <- inside_day_points
-
-  return(eCandleSticks_result)
 }
