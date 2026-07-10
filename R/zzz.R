@@ -9,6 +9,18 @@ utils::globalVariables(c(
   "PatternLevel", "PiercingPatternLevel", "ShortCandleLevel",
   "ShortCandleBodyLevel", "StomachLevel", "TasukiGapLevel",
   "ThreeBlackCrowsLevel", "ThreeInsideLevel", "ThreeOutsideLevel",
+  # new pattern levels
+  "BeltHoldLevel", "ClosingMarubozuLevel", "HighWaveLevel",
+  "LongLeggedDojiLevel", "RickshawManLevel", "SpinningTopLevel",
+  "TakuriLevel", "CounterAttackLevel", "DojiStarLevel",
+  "HomingPigeonLevel", "InNeckLevel", "MatchingLowLevel",
+  "OnNeckLevel", "SeparatingLinesLevel", "ThrustingLevel",
+  "TwoCrowsLevel", "AbandonedBabyLevel", "AdvanceBlockLevel",
+  "GapSideSideWhiteLevel", "Identical3CrowsLevel",
+  "StalledPatternLevel", "StickSandwichLevel",
+  "ThreeStarsInSouthLevel", "TristarLevel", "Unique3RiverLevel",
+  "UpsideGap2CrowsLevel", "ConcealBabySwallowLevel",
+  "BreakawayLevel", "LadderBottomLevel",
   # dplyr .data pronoun
   ".data"
 ))
