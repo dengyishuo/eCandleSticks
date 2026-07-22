@@ -1,6 +1,33 @@
 # eCandleSticks
 
+> eQuant-R 信号层 — 日本蜡烛图形态识别与可视化
+
 An R package for Japanese candlestick pattern recognition and visualization. Identifies **63 pattern types** (100+ distinct signals) from OHLC price data, covering virtually the entire TA-Lib CDL catalogue. Two-layer API: `addCSP*()` for detection and `drawCSP*()` for chart annotation.
+
+---
+
+## 在 eQuant 生态中的角色
+
+| | |
+|---|---|
+| **层级** | 信号层（K 线形态识别） |
+| **上游依赖** | 无其他 eQuant 包强制依赖（独立运作）；可接收 edatatools 行情数据 |
+| **下游调用** | eFinCharts（核心：形态叠加到 K 线图），eFactorCraft / eBacktestCraft（可选：形态信号作为因子输入） |
+| **生态定位** | 独立于因子计算链路之外的信号识别层。提供 63 种蜡烛图形态的检测能力，检测结果既可通过 eFinCharts 叠加到 K 线图表，也可作为离散信号流入因子工程或策略回测管线 |
+
+```
+eCandleSticks (信号层: 63 种蜡烛图形态)
+  ├── 单线形态 (17): Doji, Hammer, ShootingStar, Marubozu ...
+  ├── 双线形态 (18): Engulfing, Harami, PiercingPattern, DarkCloudCover ...
+  ├── 三线形态 (18): Star, ThreeSoldiers, ThreeCrows, AbandonedBaby ...
+  ├── 多线形态 (3+): Breakaway, LadderBottom ...
+  ├── 参数化形态 (7): NHigherClose, NBlended ...
+  ├── 趋势辅助: TrendDetectionChannel, TrendDetectionSMA, DonchianChannel
+  ├── 被依赖: eFinCharts (核心) → 可视化叠加
+  └── 可选输入: eFactorCraft / eBacktestCraft (形态信号作为因子)
+```
+
+---
 
 ## Installation
 
@@ -166,6 +193,18 @@ Functions are grouped by two `@family` dimensions for easy navigation in the doc
 
 - **By candle count**: `pattern-1bar`, `pattern-2bar`, `pattern-3bar`, `pattern-4bar`, `pattern-5bar`, `pattern-nbar`
 - **By direction**: `pattern-bull`, `pattern-bear`
+
+## 相关包
+
+- [eFinCharts](../eFinCharts/) — 消费 eCandleSticks 的形态检测结果，叠加到 K 线图
+- [eFactorCraft](../eFactorCraft/) — 可选：形态信号作为因子输入做评价
+- [eBacktestCraft](../eBacktestCraft/) — 可选：形态信号触发策略信号
+
+## 作者
+
+邓一硕 · GitHub: [dengyishuo](https://github.com/dengyishuo)
+
+---
 
 ## Links
 
